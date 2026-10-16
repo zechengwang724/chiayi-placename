@@ -359,3 +359,35 @@ button.e-thumb:hover{outline:2px solid var(--ink);outline-offset:1px}
 .missing.e-thumb{cursor:default;font-size:11px;padding:4px;min-height:0}
 .missing.e-thumb small{display:none}
 .face-btn{cursor:pointer}
+
+/* ---------- 地名頁 ---------- */
+.place-page{gap:32px}
+.place-page .wordcard{padding-top:16px}
+.place-page .wordcard .kicker{display:flex;align-items:center;gap:8px}
+.place-page .wordcard .kicker .mk{width:11px;height:11px;border:0;box-shadow:none}
+.say{display:flex;align-items:center;gap:10px;width:min(360px,100%)}
+.say .lab{font-size:12px;color:var(--muted);white-space:nowrap}
+.say audio{flex:1;height:36px;min-width:0}
+.origin{display:grid;gap:24px}
+.origin.two{grid-template-columns:1fr 1fr;align-items:start}
+.origin-text{display:flex;flex-direction:column;gap:12px}
+.origin-map{display:flex;flex-direction:column;gap:10px}
+.origin-map .mini-map{height:280px}
+.rel .item img,.rel .item .ph{width:64px;height:48px;object-fit:cover;border-radius:3px;background:var(--rule)}
+.rel .item .nm .mk{display:inline-block;width:10px;height:10px;border:0;box-shadow:none;vertical-align:1px}
+@media (max-width:720px){ .origin.two{grid-template-columns:1fr} .origin-map .mini-map{height:220px} }
+/* 地圖頁鎖高度時，頂端選單不能被壓縮 */
+.site-head,footer.foot{flex-shrink:0}
+.map-legend .tiles{padding:6px 8px 6px 12px;gap:8px;flex-wrap:nowrap}
+.map-legend .tiles label{font-size:13px;color:var(--muted);white-space:nowrap}
+.map-legend .tiles .chip-select{min-width:0}
+.map-legend .tiles select{max-width:min(280px,60vw);text-overflow:ellipsis}
+
+/* 底圖：垂直清單 */
+.map-legend .box.tiles{flex-direction:column;align-items:stretch;gap:2px;padding:8px;flex-wrap:nowrap}
+.tiles-h{font-size:12px;color:var(--muted);letter-spacing:.06em;padding:0 8px 4px}
+.tile-opt{font:inherit;font-size:13px;text-align:left;border:0;background:none;color:var(--ink);border-radius:4px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.tile-opt:hover{background:var(--paper)}
+.tile-opt[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+.map-legend .box.legend-box{align-self:stretch;justify-content:center}
+@media (max-width:820px){ .tile-opt{font-size:12px;padding:3px 8px} }

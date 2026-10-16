@@ -85,12 +85,12 @@
   var SINICA = '歷史地圖：中央研究院人社中心 GIS 專題中心';
   function sinica(id, fmt) { return 'https://gis.sinica.edu.tw/tileserver/file-exists.php?img=' + id + '-' + fmt + '-{z}-{x}-{y}'; }
   var TILES = {
-    gray:  { name: '電子地圖', attr: NLSC, url: 'https://wmts.nlsc.gov.tw/wmts/EMAP01/default/GoogleMapsCompatible/{z}/{y}/{x}' },
-    photo: { name: '航照',   attr: NLSC, url: 'https://wmts.nlsc.gov.tw/wmts/PHOTO2/default/GoogleMapsCompatible/{z}/{y}/{x}' },
-    jm1904: { name: '1904 堡圖',   attr: SINICA, url: sinica('JM20K_1904', 'jpg'), native: 17 },
-    jm1921: { name: '1921 堡圖',   attr: SINICA, url: sinica('JM20K_1921', 'jpg'), native: 17 },
-    jm1944: { name: '1944 地形圖', attr: SINICA, url: sinica('JM25K_1944', 'png'), native: 17 },
-    tm1955: { name: '1955 省圖',   attr: SINICA, url: sinica('TM25K_1955', 'png'), native: 17 }
+    gray:  { name: '臺灣通用電子地圖（灰階）', attr: NLSC, url: 'https://wmts.nlsc.gov.tw/wmts/EMAP01/default/GoogleMapsCompatible/{z}/{y}/{x}' },
+    photo: { name: '正射影像圖',   attr: NLSC, url: 'https://wmts.nlsc.gov.tw/wmts/PHOTO2/default/GoogleMapsCompatible/{z}/{y}/{x}' },
+    jm1904: { name: '1904 日治臺灣堡圖（明治版）',   attr: SINICA, url: sinica('JM20K_1904', 'jpg'), native: 17 },
+    jm1921: { name: '1921 日治臺灣堡圖（大正版）',   attr: SINICA, url: sinica('JM20K_1921', 'jpg'), native: 17 },
+    jm1944: { name: '1944 日治地形圖（航照修正版）', attr: SINICA, url: sinica('JM25K_1944', 'png'), native: 17 },
+    tm1955: { name: '1955 二萬五千分一臺灣省圖',   attr: SINICA, url: sinica('TM25K_1955', 'png'), native: 17 }
   };
   var TILE_ORDER = Object.keys(TILES);
   var M = null;   // 目前的地圖狀態
@@ -108,9 +108,9 @@
             '<div class="box legend-box" aria-label="圖例">' +
               '<span><i class="mk mk-site"></i>古蹟</span><span><i class="mk mk-place"></i>古地名</span>' +
             '</div>' +
-            '<div class="box tiles" role="group" aria-label="底圖">' +
+            '<div class="box tiles" role="group" aria-labelledby="tiles-h"><div class="tiles-h" id="tiles-h">底圖</div>' +
             TILE_ORDER.map(function (k, i) {
-              return '<button type="button" class="chip" data-tile="' + k + '" aria-pressed="' + (i === 0) + '">' + TILES[k].name + '</button>';
+              return '<button type="button" class="tile-opt" data-tile="' + k + '" aria-pressed="' + (i === 0) + '">' + TILES[k].name + '</button>';
             }).join('') +
             '</div>' +
           '</div>' +
@@ -162,7 +162,7 @@
     else map.setView([23.4800, 120.4491], 13);
     labels();
 
-    app.querySelector('.map-legend').addEventListener('click', function (e) {
+    app.querySelector('.tiles').addEventListener('click', function (e) {
       var b = e.target.closest('[data-tile]');
       if (!b || b.dataset.tile === M.tile) return;
       map.removeLayer(layers[M.tile]);
@@ -637,6 +637,74 @@
     else window.scrollTo(0, 0);
   }
 
+  // ---------- 地名頁（線框 A1：字卡＋由來與地圖並排） ----------
+  function renderPlace(id) {
+    var p = placeById[id];
+    if (!p) { app.innerHTML = notFound('地名', id); return; }
+    var h = '<article class="page place-page">';
+    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › <a href="#/places">地名</a> › ' + esc(p.name) + '</nav>';
+
+    // 字卡
+    var rd = [];
+    if (p.tailo) rd.push('<dt>台羅</dt><dd>' + esc(p.tailo) + '</dd>');
+    if (p.poj) rd.push('<dt>白話字</dt><dd>' + esc(p.poj) + '</dd>');
+    if (p.hanyu) rd.push('<dt>漢語拼音</dt><dd>' + esc(p.hanyu) + '</dd>');
+    h += '<header class="wordcard">' +
+      '<div class="kicker"><i class="mk mk-place"></i>古地名 No.' + esc(p.id) + (where(p) ? '・' + esc(where(p)) : '') + '</div>' +
+      '<h1 class="title">' + esc(p.name) + '</h1>' +
+      (rd.length ? '<dl class="readings">' + rd.join('') + '</dl>' : '') +
+      (p.audio ? '<div class="say"><span class="lab">念法</span>' + audio(p.audio) + '</div>' : '') +
+      '</header>';
+
+    // 由來＋小地圖
+    var rel = [];
+    (p.sites || []).forEach(function (sid) { if (siteById[sid]) rel.push(['site', siteById[sid]]); });
+    h += '<section class="origin' + (hasPos(p) ? ' two' : '') + '" aria-label="地名由來與位置">' +
+      '<div class="origin-text">' +
+        (p.intro ? '<p class="prose">' + text(p.intro) + '</p>' : '<p class="empty">尚無地名簡介。</p>') +
+        (p.source ? '<p class="note">資料來源：' + esc(p.source) + '</p>' : '') +
+      '</div>';
+    if (hasPos(p)) {
+      h += '<div class="origin-map"><div class="mini-map" id="place-map"></div>' +
+        '<div class="loc-row"><span class="note">' + esc(p.town || '') + (p.town ? '・' : '') + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + '</span>' +
+        '<a class="btn" href="#/map/place/' + enc(p.id) + '">在大地圖上查看 →</a></div></div>';
+    }
+    h += '</section>';
+
+    // 相關古蹟
+    var rows = [], seen = {};
+    (p.sites || []).forEach(function (sid) {
+      var s = siteById[sid]; if (!s) return;
+      seen[sid] = 1;
+      rows.push(siteRow(s, p.dist && p.dist[sid], false));
+    });
+    (p.nearSites || []).forEach(function (sid) {
+      var s = siteById[sid]; if (!s || seen[sid]) return;
+      rows.push(siteRow(s, p.dist && p.dist[sid], true));
+    });
+    if (rows.length) h += '<section class="section"><h2>相關古蹟 <small>' + rows.length + ' 處</small></h2><div class="rel">' + rows.join('') + '</div></section>';
+
+    // 耆老口述
+    var els = (p.elders || []).map(function (eid) { return elderById[eid]; }).filter(Boolean);
+    h += '<section class="section"><h2>耆老口述 <small>' + els.length + ' 位提到</small></h2>' +
+      (els.length ? '<div class="elders">' + els.map(function (e) { return elderCard(e, { siteLink: true }); }).join('') + '</div>'
+                  : '<p class="empty">目前沒有耆老訪談提到這個地名。</p>') + '</section>';
+    h += '</article>';
+
+    app.innerHTML = h;
+    miniMap('place-map', p, 'place', rel);
+    window.scrollTo(0, 0);
+  }
+
+  function siteRow(s, m, inferred) {
+    var ph = (s.photos || []).filter(function (x) { return !x.missing; })[0];
+    return '<a class="item" href="#/site/' + enc(s.id) + '">' +
+      (ph ? '<img src="' + esc(ph.thumb || ph.src) + '" alt="" data-name="' + esc(ph.name) + '">' : '<span class="ph"></span>') +
+      '<div><div class="nm"><i class="mk mk-site"></i> ' + esc(s.name) + (s.tailo ? ' <span class="r">' + esc(s.tailo) + '</span>' : '') + '</div>' +
+      (s.intro ? '<div class="sub">' + esc(isExample(s.intro) ? s.intro.slice(EXAMPLE.length) : s.intro) + '</div>' : '') +
+      '</div><span class="d">' + (m != null ? meters(m) : '') + (inferred ? '<br><small>距離推算</small>' : '') + '</span></a>';
+  }
+
   function placeRow(p, m, inferred) {
     return '<a class="item" href="#/place/' + enc(p.id) + '"><i class="mk mk-place"></i><div>' +
       '<div class="nm">' + esc(p.name) + (p.tailo ? ' <span class="r">' + esc(p.tailo) + '</span>' : '') + '</div>' +
@@ -667,6 +735,12 @@
       var s = siteById[r.id];
       document.title = (s ? s.name : '古蹟') + '｜嘉義古蹟與古地名';
       renderSite(r.id, r.query);
+      return;
+    }
+    if (r.view === 'place') {
+      var pl = placeById[r.id];
+      document.title = (pl ? pl.name : '地名') + '｜嘉義古蹟與古地名';
+      renderPlace(r.id);
       return;
     }
     document.title = page.title + '｜嘉義古蹟與古地名';
