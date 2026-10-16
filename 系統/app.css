@@ -444,3 +444,160 @@ button.e-thumb:hover{outline:2px solid var(--ink);outline-offset:1px}
   .tiles:not(.open) .tile-opt{display:none}
   .map-legend .box.tiles{padding:4px}
 }
+
+/* ---------- 耆老列表、耆老頁 ---------- */
+.cnt-link{text-decoration:none;color:inherit}
+.cnt-link:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.elder-rows .srow:hover .nm{color:var(--water)}
+.site-tag{display:inline-flex;align-items:center;gap:5px;margin-right:12px}
+.site-tag .mk{width:9px;height:9px;border:0;box-shadow:none}
+.who-link{text-decoration:none}
+.who-link:hover b{text-decoration:underline;text-underline-offset:3px}
+
+.elder-page{max-width:960px;gap:36px}
+.elder-top{display:grid;gap:32px;align-items:start}
+.elder-top.two{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}
+.elder-intro{display:flex;flex-direction:column;gap:12px}
+.elder-intro .kicker{font-size:13px;color:var(--muted);letter-spacing:.08em}
+.elder-intro .facts{margin:4px 0 0}
+.sum-block{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--rule)}
+.sum-block h2{font-size:14px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.sum-block .prose{font-size:16px}
+.elder-gallery{display:flex;flex-direction:column;gap:8px;min-width:0}
+.eg-main{position:relative;display:block;width:100%;aspect-ratio:4/3;padding:0;border:0;border-radius:6px;overflow:hidden;background:var(--rule);cursor:zoom-in}
+.eg-main img{width:100%;height:100%;object-fit:cover}
+.eg-main .count{position:absolute;right:8px;bottom:8px;background:rgba(15,20,21,.72);color:#fff;font-size:12px;padding:1px 8px;border-radius:10px;font-variant-numeric:tabular-nums}
+.missing.eg-main{cursor:default}
+.eg-thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.eg-thumb{flex:none;width:84px;height:63px;padding:0;border:2px solid transparent;border-radius:4px;overflow:hidden;background:var(--rule);cursor:pointer}
+.eg-thumb img{width:100%;height:100%;object-fit:cover}
+.eg-thumb[aria-current="true"]{border-color:var(--ink)}
+.missing.eg-thumb{width:84px;height:63px;min-height:0;font-size:10px;padding:2px;flex:none}
+.missing.eg-thumb small{display:none}
+.elder-page audio{width:100%;height:40px}
+.mentions.big{gap:8px}
+.mentions.big .chip{font-size:14px;padding:4px 14px}
+.mentions.big .chip .mk{width:9px;height:9px;border:0;box-shadow:none}
+.mentions.big .chip .r{font-size:12px;color:var(--muted)}
+.doc-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.transcript.full{max-height:none}
+@media (max-width:760px){ .elder-top.two{grid-template-columns:1fr} .elder-gallery{order:-1} }
+
+/* 距離說明：距離是依座標計算，不是 Excel 的資料 */
+small.calc{font-size:12px;font-weight:400;color:var(--muted);margin-left:auto;letter-spacing:0}
+.pd h3 small.calc{float:right;margin-top:2px}
+
+/* ---------- 審查用：檔案下載、完整欄位 ---------- */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--rule);border-radius:6px;background:var(--surface)}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th,.tbl td{padding:8px 12px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+.tbl tr:last-child th,.tbl tr:last-child td{border-bottom:0}
+.tbl thead th{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em;background:var(--paper)}
+.tbl .k{white-space:nowrap;color:var(--muted)}
+.tbl .fn{word-break:break-all}
+.tbl .sz{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+.tbl .dl{white-space:nowrap;text-align:right}
+.tbl .dl a{font-weight:600;color:var(--water)}
+.tbl .na{color:var(--muted);font-size:13px}
+.tbl.kv th{width:12em;font-weight:500;color:var(--muted);white-space:nowrap}
+.tbl.kv td{white-space:pre-wrap;word-break:break-word}
+.raw details{border-top:1px solid var(--rule);padding-top:4px}
+.raw summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:8px 0;font-size:18px;font-weight:600;list-style:none}
+.raw summary::-webkit-details-marker{display:none}
+.raw summary::before{content:"";width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);margin-right:4px;transition:transform .15s}
+.raw details[open] summary::before{transform:rotate(45deg)}
+.raw summary small{font-size:13px;font-weight:400;color:var(--muted)}
+.raw details > .tbl-wrap,.raw .raw-row{margin-top:8px}
+.raw .raw-row{font-size:13px;color:var(--muted);font-weight:600}
+
+footer.foot{display:flex;flex-wrap:wrap;gap:6px 24px;justify-content:space-between}
+.foot .srcs{display:flex;flex-wrap:wrap;gap:4px 14px}
+.foot .srcs a{color:var(--muted)}
+.foot .srcs a:hover{color:var(--ink)}
+.lb-dl{margin-left:14px;color:#fff;font-weight:600}
+
+/* ---------- 列印：只留內容 ---------- */
+@media print{
+  :root{--paper:#fff;--surface:#fff;--ink:#000;--muted:#444;--rule:#bbb;color-scheme:light}
+  body{background:#fff;font-size:12pt}
+  .site-head,.home,.mapview,.leaflet-control-container,.btn,.acts,.tiles,.map-legend,.lightbox,.crumb .back,.e-gallery,audio,.loc-row .btn,.face-btn{display:none!important}
+  .page{max-width:none;padding:0}
+  .mini-map{height:220px;break-inside:avoid}
+  .transcript[hidden]{display:flex!important}
+  .transcript{max-height:none!important;overflow:visible}
+  .elder,.rel .item,.srow{break-inside:avoid}
+  a{text-decoration:none;color:#000}
+  .tbl .dl{display:none}
+  footer.foot .srcs{display:none}
+}
+.tbl thead th:nth-child(3){text-align:right}
+.raw-body{display:flex;flex-direction:column;gap:8px}
+@media print{ .raw-body[hidden]{display:flex!important} }
+
+/* ---------- 成果總覽 ---------- */
+.overview{max-width:960px;gap:32px}
+.tiles-ov{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.tile{display:flex;flex-direction:column;gap:2px;padding:16px 18px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);text-decoration:none}
+a.tile:hover{border-color:var(--ink)}
+.tile b{font-size:30px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.tile span{font-size:13px;color:var(--muted)}
+.tbl.num td,.tbl.num th{font-variant-numeric:tabular-nums}
+.tbl.num td:not(:first-child),.tbl.num th:not(:first-child){text-align:right}
+.ov-elders td:nth-child(2),.ov-elders th:nth-child(2),.ov-elders td:nth-child(4),.ov-elders th:nth-child(4),.ov-elders td:nth-child(7),.ov-elders th:nth-child(7){text-align:center}
+.ov-elders tbody tr{cursor:pointer}
+.ov-elders tbody tr:hover,.ov-elders tbody tr:focus-visible{background:var(--paper);outline:none}
+.ov-elders td:first-child a{font-weight:600;text-decoration:none}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.sec-head h2{display:flex;align-items:baseline;gap:8px}
+.sec-head h2 small{font-size:13px;color:var(--muted);font-weight:400}
+.overview .tbl{white-space:nowrap}
+
+/* 所有內容頁統一寬度 */
+.page,.elder-page,.overview{max-width:960px}
+
+/* ==========================================================
+   字級標準（全站統一）
+   一級標題  頁面標題        36px 粗體
+   二級標題  區塊標題        20px 粗體，下方細線
+   項目名稱  清單／卡片名稱  18px 粗體
+   小標籤    分組、類別      13px 灰字
+   內文 16px；說明 14px
+   ========================================================== */
+:root{--fs-h1:36px;--fs-h2:20px;--fs-item:18px;--fs-body:16px;--fs-small:14px;--fs-label:13px}
+@media (max-width:640px){:root{--fs-h1:28px;--fs-h2:18px;--fs-item:17px}}
+
+/* 頁面節奏：麵包屑 → 標題 → 內容，間距一致 */
+.page,.site-page,.place-page,.elder-page,.overview,.list-page{gap:28px}
+.crumb{margin-bottom:-12px}
+
+/* 一級標題 */
+.page h1.title,.list-head .title,.elder-intro .title,.site-page .head .title{font-size:var(--fs-h1);font-weight:700;letter-spacing:.04em;line-height:1.25;margin:0}
+.list-head{padding-bottom:0}
+.list-head .title small{font-size:var(--fs-small)}
+
+/* 二級標題 */
+.section > h2,.sec-head h2,.sum-block h2,.raw summary{font-size:var(--fs-h2);font-weight:700;color:var(--ink);letter-spacing:0;line-height:1.4}
+.section > h2,.sec-head{padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.sec-head h2{padding:0;border:0}
+.section > h2 small,.sec-head h2 small,.raw summary small{font-size:var(--fs-label);font-weight:400;color:var(--muted)}
+.sum-block{border-top:0;padding-top:4px}
+.sum-block h2{padding-bottom:8px;border-bottom:1px solid var(--rule)}
+
+/* 項目名稱 */
+.srow .nm,.rel .item .nm,.elder .who b,.dict .nm,.card .nm{font-size:var(--fs-item);font-weight:700}
+.dict .nm{letter-spacing:.06em}
+
+/* 小標籤 */
+.kicker,.elder-intro .kicker,.group-h,.tiles-h{font-size:var(--fs-label);font-weight:600;color:var(--muted);letter-spacing:.06em}
+.group{display:flex;flex-direction:column}
+.group-h{padding:0 0 8px;border-bottom:1px solid var(--ink)}
+
+/* 內文與說明 */
+.prose,.sum-block .prose{font-size:var(--fs-body)}
+.srow .sub,.dict .sub,.rel .item .sub,.note,.facts{font-size:var(--fs-small)}
+/* 標題區塊從同一高度開始：小標籤（有的話）緊貼在一級標題上方 */
+.place-page .wordcard{padding-top:0}
+.site-page .head,.elder-intro,.place-page .wordcard{gap:6px}
+.elder-top{margin-top:0}
+.elder-intro .kicker + .title,.head .kicker + .title,.wordcard .kicker + .title{margin-top:0}
+.wordcard .title{margin-right:0}

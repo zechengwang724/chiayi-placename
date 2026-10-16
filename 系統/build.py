@@ -17,7 +17,9 @@ import zipfile
 
 # ---------- 設定 ----------
 SHOW_ELDER_NAME = False      # 是否在網頁上顯示耆老姓名
-NEARBY_RADIUS_M = 1000       # 自動列為「附近」的距離（公尺）
+# 不顯示在網頁上的欄位（「完整欄位」中以「不公開」表示）；欄位名稱以開頭比對
+PRIVATE_FIELDS = ('耆老姓名', '耆老生日', '住址', '受訪同意書')
+ROW = '\x00row'               # 記錄每筆資料在 Excel 中的列號
 THUMB_SIZE = 480             # 縮圖長邊（像素）
 SPLIT = re.compile(r'[、,，;；/\n]+')
 
@@ -74,16 +76,37 @@ def read_xlsx(path):
             else:
                 val = v.text if v is not None else ''
             cells[col_index(c.get('r'))] = (val or '').strip()
-        rows.append(cells)
+        rows.append((row.get('r'), cells))
     if not rows:
         return []
-    header = {i: h for i, h in rows[0].items() if h}
+    header = {i: h for i, h in sorted(rows[0][1].items()) if h}
     out = []
-    for cells in rows[1:]:
+    for rno, cells in rows[1:]:
         rec = {header[i]: cells.get(i, '') for i in header}
         if any(rec.values()):
+            rec[ROW] = int(rno) if rno and rno.isdigit() else None
             out.append(rec)
     return out
+
+
+def fmt_value(v):
+    """浮點數去掉多餘的位數（例：120.48030300000001 → 120.480303）。"""
+    if re.fullmatch(r'-?\d+\.\d{8,}', v or ''):
+        return ('%.7f' % float(v)).rstrip('0').rstrip('.')
+    if re.fullmatch(r'-?\d+\.0+', v or ''):
+        return v.split('.')[0]
+    return v
+
+
+def raw_of(rec, source):
+    """保留 Excel 原始欄位（依欄位順序），供網頁「完整欄位」區塊顯示。"""
+    private = tuple(f for f in PRIVATE_FIELDS if not (SHOW_ELDER_NAME and f == '耆老姓名'))
+    fields = []
+    for k, v in rec.items():
+        if k == ROW:
+            continue
+        fields.append([k, None if k.startswith(private) else fmt_value(v)])
+    return {'src': source, 'row': rec.get(ROW), 'fields': fields}
 
 
 def pick(rec, *candidates):
@@ -149,6 +172,26 @@ def index_media():
 
 
 HAS_SIPS = shutil.which('sips') is not None
+HAS_AFINFO = shutil.which('afinfo') is not None
+HAS_FFPROBE = shutil.which('ffprobe') is not None
+
+
+def audio_seconds(rel):
+    """讀取錄音長度（秒）。Mac 用內建 afinfo；有安裝 ffprobe 也可；都沒有則略過。"""
+    path = os.path.join(ROOT, rel)
+    try:
+        if HAS_AFINFO:
+            out = subprocess.run(['afinfo', path], capture_output=True, text=True).stdout
+            m = re.search(r'estimated duration:\s*([\d.]+)', out)
+            if m:
+                return round(float(m.group(1)))
+        if HAS_FFPROBE:
+            out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+                                  '-of', 'default=nw=1:nk=1', path], capture_output=True, text=True).stdout
+            return round(float(out.strip()))
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def thumb(rel):
@@ -198,9 +241,13 @@ def media(name, kind, owner):
     if not rel:
         warn(f'{owner}：找不到檔案「{name}」')
         return {'name': name, 'missing': True}
-    item = {'name': name, 'src': rel}
+    item = {'name': name, 'src': rel, 'size': os.path.getsize(os.path.join(ROOT, rel))}
     if kind == 'photo':
         item['thumb'] = thumb(rel)
+    elif kind == 'audio':
+        sec = audio_seconds(rel)
+        if sec is not None:
+            item['sec'] = sec
     elif kind == 'doc':
         text = read_doc_text(rel)
         if text is not None:
@@ -242,6 +289,7 @@ def main():
             p['audio'] = media(a, 'audio', f'地名 {name}')
         if p['lat'] is None:
             warn(f'地名 {name}：缺少經緯度，不會出現在地圖上')
+        p['raw'] = raw_of(r, os.path.basename(path))
         places.append(p)
 
     path = find_db('古蹟')
@@ -261,29 +309,50 @@ def main():
         }
         if s['lat'] is None:
             warn(f'古蹟 {name}：缺少經緯度，不會出現在地圖上')
+        s['raw'] = raw_of(r, os.path.basename(path))
         sites.append(s)
 
+    # 耆老：一位耆老可對應多處古蹟。
+    #   古蹟編號一格可填多個（以「、」分隔），或同一位耆老填多列，會自動合併。
     path = find_db('耆老')
+    by_elder = {}
     for r in read_xlsx(path) if path else []:
         eid = norm_id(pick(r, '耆老編號'))
         if not eid:
             continue
         label = f'耆老 {eid}'
-        e = {
-            'id': eid, 'site': norm_id(pick(r, '古蹟編號')),
-            'birth': year_month(pick(r, '耆老生日')), 'gender': pick(r, '性別'),
-            'birthplace': pick(r, '出生地'), 'residence': pick(r, '居住地'),
-            'summary': pick(r, '訪談重點摘要'),
-            '_places': split_list(pick(r, '訪談提及地名')),
-            'photos': [media(f, 'photo', label) for f in split_list(pick(r, '耆老照片'))],
-        }
-        if SHOW_ELDER_NAME:
-            e['name'] = pick(r, '耆老姓名')
-        a = pick(r, '錄音檔名')
-        e['audio'] = [media(f, 'audio', label) for f in split_list(a)]
-        t = pick(r, '文字稿檔名')
-        e['docs'] = [media(f, 'doc', label) for f in split_list(t)]
-        elders.append(e)
+        e = by_elder.get(eid)
+        if e is None:
+            e = by_elder[eid] = {
+                'id': eid, 'sites': [], 'birth': '', 'gender': '', 'birthplace': '', 'residence': '',
+                'summaries': [], '_places': [], 'photos': [], 'audio': [], 'docs': [], '_seen': set(),
+            }
+            e['raws'] = []
+            elders.append(e)
+            if SHOW_ELDER_NAME:
+                e['name'] = pick(r, '耆老姓名')
+        e['raws'].append(raw_of(r, os.path.basename(path)))
+        for k, col in (('birth', '耆老生日'), ('gender', '性別'), ('birthplace', '出生地'), ('residence', '居住地')):
+            if not e[k]:
+                e[k] = year_month(pick(r, col)) if k == 'birth' else pick(r, col)
+        for sid in split_list(pick(r, '古蹟編號')):
+            sid = norm_id(sid)
+            if sid not in e['sites']:
+                e['sites'].append(sid)
+        sm = pick(r, '訪談重點摘要')
+        if sm and sm not in e['summaries']:
+            e['summaries'].append(sm)
+        for t in split_list(pick(r, '訪談提及地名')):
+            if t not in e['_places']:
+                e['_places'].append(t)
+        for kind, key, col in (('photo', 'photos', '耆老照片'), ('audio', 'audio', '錄音檔名'), ('doc', 'docs', '文字稿檔名')):
+            for f in split_list(pick(r, col)):
+                if (key, f) not in e['_seen']:
+                    e['_seen'].add((key, f))
+                    e[key].append(media(f, kind, label))
+    for e in elders:
+        e.pop('_seen')
+        e['summary'] = '\n'.join(e.pop('summaries'))
 
     # ---- 關聯 ----
     by_place = {}
@@ -313,33 +382,34 @@ def main():
         s['elders'] = []
         for pid in s['places']:
             place_by_id[pid]['sites'].append(s['id'])
-        # 距離推算
+        # 直線距離（僅供參考）
+        # 只計算 Excel「附近古地名」已填寫的關聯之間的直線距離，不自動推算新的關聯
         s['near'] = []
         for p in places:
             d = dist_m(s, p)
-            if d is not None:
-                if p['id'] in s['places'] or d <= NEARBY_RADIUS_M:
-                    s['near'].append({'id': p['id'], 'm': d})
-                if d <= NEARBY_RADIUS_M and s['id'] not in p['sites']:
-                    p.setdefault('nearSites', []).append(s['id'])
+            if d is not None and p['id'] in s['places']:
+                s['near'].append({'id': p['id'], 'm': d})
         for p in places:
             d = dist_m(s, p)
             if d is not None:
                 p.setdefault('dist', {})[s['id']] = d
 
+    site_by_id = {s['id']: s for s in sites}
     for e in elders:
-        if e['site'] and e['site'] not in site_ids:
-            warn(f'耆老 {e["id"]}：古蹟編號「{e["site"]}」不在古蹟資料庫中')
-        for s in sites:
-            if s['id'] == e['site']:
-                s['elders'].append(e['id'])
+        for sid in e['sites']:
+            if sid not in site_ids:
+                warn(f'耆老 {e["id"]}：古蹟編號「{sid}」不在古蹟資料庫中')
+            elif e['id'] not in site_by_id[sid]['elders']:
+                site_by_id[sid]['elders'].append(e['id'])
+        e['sites'] = [sid for sid in e['sites'] if sid in site_ids]
         e['places'], e['placesUnlinked'] = resolve(e.pop('_places'), f'耆老 {e["id"]} 訪談提及地名')
         for pid in e['places']:
             place_by_id[pid]['elders'].append(e['id'])
 
     data = {
         'generated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
-        'radius': NEARBY_RADIUS_M,
+        'sources': [{'name': f, 'src': '資料庫/' + f, 'size': os.path.getsize(os.path.join(DB_DIR, f))} for f in sorted(os.listdir(DB_DIR))
+                    if f.lower().endswith('.xlsx') and not f.startswith('~$')],
         'places': places, 'sites': sites, 'elders': elders,
     }
     with open(os.path.join(SYS, 'data.js'), 'w', encoding='utf-8') as f:

@@ -6,11 +6,14 @@
   var EXAMPLE = '（範例資料，待替換）';
 
   var PAGES = {
-    map:    { nav: 'map',    title: '地圖' },
+    map:    { nav: 'map',    title: '首頁' },
     sites:  { nav: 'sites',  title: '古蹟列表', note: '' },
     site:   { nav: 'sites',  title: '古蹟頁', note: '單欄長頁（線框 A）＋耆老卡片 A' },
     places: { nav: 'places', title: '地名列表', note: '' },
     place:  { nav: 'places', title: '地名頁', note: '字卡式（線框 A）' },
+    elders: { nav: 'elders', title: '耆老列表', note: '' },
+    elder:  { nav: 'elders', title: '耆老頁', note: '' },
+    overview: { nav: 'overview', title: '成果總覽', note: '' },
     search: { nav: '',       title: '搜尋結果', note: '' }
   };
 
@@ -35,6 +38,39 @@
     return (ex ? '<span class="tag-ex">範例資料</span> ' : '') + esc(ex ? s.slice(EXAMPLE.length) : s);
   }
   function isExample(s) { return (s || '').indexOf(EXAMPLE) === 0; }
+
+  // ---------- 審查用：檔案下載清單、完整欄位（Excel 原始內容） ----------
+  function size(n) {
+    if (n == null) return '';
+    return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  }
+  function filesBlock(groups) {
+    // groups: [[類別, [media…]], …]
+    var rows = [];
+    groups.forEach(function (g) {
+      (g[1] || []).forEach(function (m) {
+        if (!m || !m.name) return;
+        rows.push('<tr><td class="k">' + esc(g[0]) + '</td><td class="fn">' + esc(m.name) + '</td>' +
+          (m.missing ? '<td class="sz"></td><td class="dl"><span class="na">未提供</span></td>'
+                     : '<td class="sz">' + size(m.size) + '</td><td class="dl"><a href="' + esc(m.src) + '" download="' + esc(m.name) + '" target="_blank" rel="noopener">下載</a></td>') + '</tr>');
+      });
+    });
+    if (!rows.length) return '';
+    return '<section class="section files"><h2>檔案下載 <small>' + rows.length + ' 個</small></h2>' +
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>類別</th><th>檔名</th><th>大小</th><th></th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div></section>';
+  }
+  function rawBlock(raws) {
+    raws = (raws || []).filter(Boolean);
+    if (!raws.length) return '';
+    return '<section class="section raw"><details><summary><span>完整欄位</span><small>Excel 原始內容・' +
+      esc(raws[0].src) + '・第 ' + raws.map(function (r) { return r.row; }).join('、') + ' 列</small></summary>' +
+      raws.map(function (r) {
+        return (raws.length > 1 ? '<div class="raw-row">第 ' + esc(r.row) + ' 列</div>' : '') +
+          '<div class="tbl-wrap"><table class="tbl kv"><tbody>' + r.fields.map(function (f) {
+            return '<tr><th>' + esc(f[0]) + '</th><td>' + (f[1] === null ? '<span class="na">不公開</span>' : f[1] === '' ? '<span class="na">（空白）</span>' : esc(f[1])) + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+      }).join('') + '</details></section>';
+  }
 
   // ---------- 照片、錄音：缺檔時顯示預設空框 ----------
   var MISSING_LABEL = { IMG: '照片未提供', AUDIO: '錄音未提供' };
@@ -282,7 +318,7 @@
       panel.innerHTML =
         '<h1>嘉義古蹟與古地名</h1>' +
         '<p class="lead">嘉義市的古蹟、古地名與耆老口述紀錄。點選地圖上的標記，或從下方清單查看。</p>' +
-        '<div class="counts"><span><b>' + D.sites.length + '</b>處古蹟</span><span><b>' + D.places.length + '</b>筆古地名</span><span><b>' + D.elders.length + '</b>位耆老訪談</span></div>' +
+        '<div class="counts"><span><b>' + D.sites.length + '</b>處古蹟</span><span><b>' + D.places.length + '</b>筆古地名</span><a class="cnt-link" href="#/elders"><b>' + D.elders.length + '</b>位耆老訪談</a></div>' +
         '<form id="panel-search" role="search"><label class="sr" for="panel-q">搜尋</label>' +
           '<input id="panel-q" type="search" class="panel-q" autocomplete="off" placeholder="搜尋地名、古蹟、拼音、訪談內容" value="' + esc(M.q) + '"></form>' +
         '<div class="filters">' + f('all', '全部') + f('site', '古蹟') + f('place', '古地名') +
@@ -324,13 +360,12 @@
     var fq = fold(q);
     if (!fq) return [];
     return D.elders.filter(function (e) {
-      if (M.town && !(siteById[e.site] && siteById[e.site].town === M.town)) return false;
+      if (M.town && !(e.sites || []).some(function (sid) { return siteById[sid] && siteById[sid].town === M.town; })) return false;
       elderText(e);
       return e._hay.indexOf(fq) >= 0;
     }).map(function (e) {
-      var s = siteById[e.site];
-      var href = s ? '#/site/' + enc(s.id) + '?e=' + enc(e.id) : '#/';
-      return '<li><a href="' + href + '"><span class="t">' + esc(e.id) + (s ? '<span class="from">' + esc(s.name) + '</span>' : '') + '</span>' +
+      var from = (e.sites || []).map(function (sid) { return siteById[sid] && siteById[sid].name; }).filter(Boolean).join('、');
+      return '<li><a href="#/elder/' + enc(e.id) + '"><span class="t">' + esc(e.id) + (from ? '<span class="from">' + esc(from) + '</span>' : '') + '</span>' +
         '<span class="s">' + snippet(e._text.replace(/\n+/g, ' '), q) + '</span></a></li>';
     });
   }
@@ -365,15 +400,10 @@
         var d = near.filter(function (n) { return n.id === pid; })[0];
         rows.push(relRow('place', p, d ? meters(d.m) : ''));
       });
-      near.forEach(function (n) {
-        if (listed[n.id]) return;
-        var p = placeById[n.id]; if (!p) return;
-        rows.push(relRow('place', p, meters(n.m) + '・距離推算'));
-      });
       (x.placesUnlinked || []).forEach(function (t) {
         rows.push('<li><span class="unlinked"><i class="mk mk-place"></i><span class="nm">' + esc(t) + '</span><span class="town">未收錄</span></span></li>');
       });
-      if (rows.length) h += '<h3>附近古地名</h3><ul class="list">' + rows.join('') + '</ul>';
+      if (rows.length) h += '<h3>附近古地名 <small class="calc">距離依座標計算</small></h3><ul class="list">' + rows.join('') + '</ul>';
       var n = (x.elders || []).length;
       h += '<h3>耆老訪談</h3><p class="pd-note">' + (n ? n + ' 位耆老談到這裡：' + x.elders.map(esc).join('、') : '尚無訪談') + '</p>';
     } else {
@@ -392,11 +422,7 @@
         seen[sid] = 1; related.push(['site', s]);
         srows.push(relRow('site', s, x.dist && x.dist[sid] != null ? meters(x.dist[sid]) : ''));
       });
-      (x.nearSites || []).forEach(function (sid) {
-        var s = siteById[sid]; if (!s || seen[sid]) return;
-        srows.push(relRow('site', s, meters(x.dist[sid]) + '・距離推算'));
-      });
-      if (srows.length) h += '<h3>相關古蹟</h3><ul class="list">' + srows.join('') + '</ul>';
+      if (srows.length) h += '<h3>相關古蹟 <small class="calc">距離依座標計算</small></h3><ul class="list">' + srows.join('') + '</ul>';
       var m = (x.elders || []).length;
       h += '<h3>耆老口述</h3><p class="pd-note">' + (m ? m + ' 位耆老提到這個地名：' + x.elders.map(esc).join('、') : '尚無耆老提及') + '</p>';
     }
@@ -459,7 +485,11 @@
     var p = LB.list[LB.i];
     document.getElementById('lb-img').src = p.src;
     document.getElementById('lb-img').alt = p.name;
-    document.getElementById('lb-cap').textContent = p.caption + '（' + (LB.i + 1) + ' / ' + LB.list.length + '）';
+    var cap = document.getElementById('lb-cap');
+    cap.textContent = p.caption + '（' + (LB.i + 1) + ' / ' + LB.list.length + '）';
+    var dl = document.createElement('a');
+    dl.href = p.src; dl.download = p.name; dl.target = '_blank'; dl.rel = 'noopener'; dl.className = 'lb-dl'; dl.textContent = '下載原圖';
+    cap.appendChild(dl);
     lb.querySelectorAll('.lb-nav').forEach(function (b) { b.hidden = LB.list.length < 2; });
   }
   function lbOpen(list, i) {
@@ -537,7 +567,7 @@
       ? '<button type="button" class="face-btn" data-gallery="' + esc(e.id) + '" aria-label="展開 ' + esc(e.id) + ' 的照片"><img class="face" src="' + esc(face.thumb || face.src) + '" alt="" data-name="' + esc(face.name) + '"></button>'
       : placeholder('IMG', 'face', face && face.name);
     h += '<div class="body">';
-    h += '<div class="who"><b>' + esc(e.name || e.id) + '</b>' + (e.name ? '<span>' + esc(e.id) + '</span>' : '') + '<span>' + esc(elderMeta(e)) + '</span></div>';
+    h += '<div class="who"><a class="who-link" href="#/elder/' + enc(e.id) + '"><b>' + esc(e.name || e.id) + '</b></a>' + (e.name ? '<span>' + esc(e.id) + '</span>' : '') + '<span>' + esc(elderMeta(e)) + '</span></div>';
     (e.audio && e.audio.length ? e.audio : [null]).forEach(function (a) { h += audio(a || { missing: true, name: '' }); });
     if (e.summary) h += '<p class="sum">' + text(e.summary) + '</p>';
     var tags = (e.places || []).map(function (pid) {
@@ -554,7 +584,7 @@
       acts.push(doc.missing ? '<span class="btn disabled" aria-disabled="true">文字稿未提供</span>'
                             : '<a class="btn" href="' + esc(doc.src) + '" download>原始 Word 檔</a>');
     }
-    if (opts.siteLink && e.site && siteById[e.site]) acts.push('<a class="btn" href="#/site/' + enc(e.site) + '?e=' + enc(e.id) + '">來自：' + esc(siteById[e.site].name) + ' →</a>');
+    acts.push('<a class="btn" href="#/elder/' + enc(e.id) + '">耆老頁 →</a>');
     if (acts.length) h += '<div class="acts">' + acts.join('') + '</div>';
     // 照片列：點「照片」先展開一排縮圖，點縮圖才開大圖
     var j = 0;  // 燈箱只收有檔案的照片，索引要跳過缺檔
@@ -598,7 +628,7 @@
 
   // ---------- 古蹟頁（線框 A：單欄長頁） ----------
   function notFound(kind, id) {
-    return '<section class="page"><div class="crumb"><a href="#/">地圖</a></div>' +
+    return '<section class="page"><div class="crumb"><a href="#/">首頁</a></div>' +
       '<h1 class="title">找不到這筆' + kind + '</h1><p class="prose">編號「' + esc(id) + '」不在資料庫中。請回到地圖重新選擇。</p></section>';
   }
 
@@ -607,7 +637,7 @@
     if (!s) { app.innerHTML = notFound('古蹟', id); return; }
     var photos = s.photos || [];
     var h = '<article class="page site-page">';
-    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › <a href="#/sites">古蹟</a> › ' + esc(s.name) + '</nav>';
+    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › <a href="#/sites">古蹟</a> › ' + esc(s.name) + '</nav>';
 
     // 標題
     var romans = [s.tailo, s.poj].filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; });
@@ -655,14 +685,10 @@
       listed[pid] = 1;
       rows.push(placeRow(p, nearMap[pid], false));
     });
-    (s.near || []).slice().sort(function (a, b) { return a.m - b.m; }).forEach(function (n) {
-      if (listed[n.id] || !placeById[n.id]) return;
-      rows.push(placeRow(placeById[n.id], n.m, true));
-    });
     (s.placesUnlinked || []).forEach(function (t) {
       rows.push('<div class="item unlinked"><i class="mk mk-place"></i><div><div class="nm">' + esc(t) + '</div><div class="sub">地名資料庫尚未收錄</div></div><span class="d"></span></div>');
     });
-    if (rows.length) h += '<section class="section"><h2>附近古地名 <small>' + rows.length + ' 筆</small></h2><div class="rel">' + rows.join('') + '</div></section>';
+    if (rows.length) h += '<section class="section"><h2>附近古地名 <small>' + rows.length + ' 筆</small><small class="calc">距離依座標計算</small></h2><div class="rel">' + rows.join('') + '</div></section>';
 
     // 耆老訪談
     var els = (s.elders || []).map(function (eid) { return elderById[eid]; }).filter(Boolean);
@@ -670,7 +696,9 @@
     if (s.summary) h += '<p class="prose small">' + text(s.summary) + '</p>';
     h += els.length ? '<div class="elders">' + els.map(function (e) { return elderCard(e); }).join('') + '</div>'
                     : '<p class="empty">這處古蹟目前沒有耆老訪談。</p>';
-    h += '</section></article>';
+    h += '</section>';
+    h += filesBlock([['古蹟照片', s.photos]]) + rawBlock([s.raw]);
+    h += '</article>';
 
     app.innerHTML = h;
     miniMap('site-map', s, 'site', rel);
@@ -686,7 +714,7 @@
     var p = placeById[id];
     if (!p) { app.innerHTML = notFound('地名', id); return; }
     var h = '<article class="page place-page">';
-    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › <a href="#/places">地名</a> › ' + esc(p.name) + '</nav>';
+    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › <a href="#/places">地名</a> › ' + esc(p.name) + '</nav>';
 
     // 字卡
     var rd = [];
@@ -722,17 +750,14 @@
       seen[sid] = 1;
       rows.push(siteRow(s, p.dist && p.dist[sid], false));
     });
-    (p.nearSites || []).forEach(function (sid) {
-      var s = siteById[sid]; if (!s || seen[sid]) return;
-      rows.push(siteRow(s, p.dist && p.dist[sid], true));
-    });
-    if (rows.length) h += '<section class="section"><h2>相關古蹟 <small>' + rows.length + ' 處</small></h2><div class="rel">' + rows.join('') + '</div></section>';
+    if (rows.length) h += '<section class="section"><h2>相關古蹟 <small>' + rows.length + ' 處</small><small class="calc">距離依座標計算</small></h2><div class="rel">' + rows.join('') + '</div></section>';
 
     // 耆老口述
     var els = (p.elders || []).map(function (eid) { return elderById[eid]; }).filter(Boolean);
     h += '<section class="section"><h2>耆老口述 <small>' + els.length + ' 位提到</small></h2>' +
       (els.length ? '<div class="elders">' + els.map(function (e) { return elderCard(e, { siteLink: true }); }).join('') + '</div>'
                   : '<p class="empty">目前沒有耆老訪談提到這個地名。</p>') + '</section>';
+    h += filesBlock([['念法錄音', p.audio ? [p.audio] : []]]) + rawBlock([p.raw]);
     h += '</article>';
 
     app.innerHTML = h;
@@ -746,7 +771,7 @@
       (ph ? '<img src="' + esc(ph.thumb || ph.src) + '" alt="" data-name="' + esc(ph.name) + '">' : '<span class="ph"></span>') +
       '<div><div class="nm"><i class="mk mk-site"></i> ' + esc(s.name) + (s.tailo ? ' <span class="r">' + esc(s.tailo) + '</span>' : '') + '</div>' +
       (s.intro ? '<div class="sub">' + esc(isExample(s.intro) ? s.intro.slice(EXAMPLE.length) : s.intro) + '</div>' : '') +
-      '</div><span class="d">' + (m != null ? meters(m) : '') + (inferred ? '<br><small>距離推算</small>' : '') + '</span></a>';
+      '</div><span class="d">' + (m != null ? '直線 ' + meters(m) : '') + '</span></a>';
   }
 
   // ---------- 列表頁：古蹟（清單列）、地名（辭典式），依鄉鎮分組 ----------
@@ -780,10 +805,10 @@
     var all = D.sites.slice().sort(byId);
     var items = all.filter(function (s) { return !listTown.sites || s.town === listTown.sites; });
     var h = '<section class="page list-page">' +
-      '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › 古蹟</nav>' +
+      '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › 古蹟</nav>' +
       '<header class="list-head"><h1 class="title">古蹟 <small>' + items.length + ' 處</small></h1>' + townSelect('sites', all) + '</header>';
     h += items.length ? groupByTown(items).map(function (g) {
-      return '<h2 class="group-h">' + esc(g.town) + '</h2><div class="srows">' + g.items.map(function (s) {
+      return '<section class="group"><h2 class="group-h">' + esc(g.town) + '</h2><div class="srows">' + g.items.map(function (s) {
         var ph = (s.photos || []).filter(function (x) { return !x.missing; })[0];
         var nEl = (s.elders || []).length, nPl = (s.places || []).length;
         return '<a class="srow" href="#/site/' + enc(s.id) + '">' +
@@ -791,7 +816,7 @@
           '<div class="bd"><div class="nm">' + esc(s.name) + (s.tailo ? ' <span class="r">' + esc(s.tailo) + '</span>' : '') + '</div>' +
           (s.intro ? '<p class="sub">' + plain(s.intro) + '</p>' : '') +
           '<div class="meta">訪談 ' + nEl + ' 位・附近古地名 ' + nPl + '</div></div></a>';
-      }).join('') + '</div>';
+      }).join('') + '</div></section>';
     }).join('') : '<p class="empty">這個鄉鎮目前沒有古蹟資料。</p>';
     app.innerHTML = h + '</section>';
   }
@@ -800,14 +825,14 @@
     var all = D.places.slice().sort(byId);
     var items = all.filter(function (p) { return !listTown.places || p.town === listTown.places; });
     var h = '<section class="page list-page">' +
-      '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › 地名</nav>' +
+      '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › 地名</nav>' +
       '<header class="list-head"><h1 class="title">古地名 <small>' + items.length + ' 筆</small></h1>' + townSelect('places', all) + '</header>';
     h += items.length ? groupByTown(items).map(function (g) {
-      return '<h2 class="group-h">' + esc(g.town) + '</h2><div class="dict">' + g.items.map(function (p) {
+      return '<section class="group"><h2 class="group-h">' + esc(g.town) + '</h2><div class="dict">' + g.items.map(function (p) {
         return '<a href="#/place/' + enc(p.id) + '"><span class="nm">' + esc(p.name) + '</span>' +
           '<span class="bd">' + (p.tailo ? '<span class="r">' + esc(p.tailo) + '</span>' : '') +
           (p.intro ? '<span class="sub">' + plain(p.intro) + '</span>' : '') + '</span></a>';
-      }).join('') + '</div>';
+      }).join('') + '</div></section>';
     }).join('') : '<p class="empty">這個鄉鎮目前沒有地名資料。</p>';
     app.innerHTML = h + '</section>';
   }
@@ -821,11 +846,214 @@
     if (el) el.focus();
   });
 
+  // ---------- 成果總覽：數量、分布、耆老資料一覽（只呈現數量，不標示缺漏） ----------
+  var ovSort = 'id';
+  function hms(sec) {
+    if (sec == null) return '—';
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), x = Math.round(sec % 60);
+    return h + ':' + (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + x;
+  }
+  function have(list) { return (list || []).filter(function (m) { return m && !m.missing; }); }
+  function audioSec(e) {
+    var a = have(e.audio);
+    if (!a.length || a.some(function (m) { return m.sec == null; })) return null;
+    return a.reduce(function (t, m) { return t + m.sec; }, 0);
+  }
+  function district(v) { return String(v || '').replace(/^.{2,3}[市縣]/, ''); }
+
+  function renderOverview() {
+    var photosN = D.sites.concat(D.elders).reduce(function (t, x) { return t + have(x.photos).length; }, 0);
+    var secs = D.elders.map(audioSec);
+    var known = secs.filter(function (v) { return v != null; });
+    var totalSec = known.length ? known.reduce(function (a, b) { return a + b; }, 0) : null;
+    var docsN = D.elders.reduce(function (t, e) { return t + have(e.docs).length; }, 0);
+    var tiles = [
+      [D.sites.length, '處古蹟', '#/sites'], [D.places.length, '筆古地名', '#/places'], [D.elders.length, '位耆老', '#/elders'],
+      [photosN, '張照片', ''], [hms(totalSec) + (known.length < D.elders.filter(function (e) { return have(e.audio).length; }).length ? '+' : ''), '錄音總長', ''],
+      [docsN, '份文字稿', '']
+    ];
+    var h = '<section class="page overview">' +
+      '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › 成果總覽</nav>' +
+      '<h1 class="title">成果總覽</h1>' +
+      '<div class="tiles-ov">' + tiles.map(function (t) {
+        var inner = '<b>' + esc(t[0]) + '</b><span>' + esc(t[1]) + '</span>';
+        return t[2] ? '<a class="tile" href="' + t[2] + '">' + inner + '</a>' : '<div class="tile">' + inner + '</div>';
+      }).join('') + '</div>';
+
+    // 依鄉鎮分布
+    var towns = {};
+    function bump(t, k) { t = t || '未填'; towns[t] = towns[t] || { site: 0, place: 0, elder: 0 }; towns[t][k]++; }
+    D.sites.forEach(function (x) { bump(x.town, 'site'); });
+    D.places.forEach(function (x) { bump(x.town, 'place'); });
+    D.elders.forEach(function (x) { bump(district(x.residence), 'elder'); });
+    var tk = Object.keys(towns).sort(function (a, b) { return a === '未填' ? 1 : b === '未填' ? -1 : (a < b ? -1 : a > b ? 1 : 0); });
+    h += '<section class="section"><h2>依鄉鎮分布</h2><div class="tbl-wrap"><table class="tbl num">' +
+      '<thead><tr><th>鄉鎮</th><th>古蹟</th><th>古地名</th><th>耆老（居住地）</th></tr></thead><tbody>' +
+      tk.map(function (t) { var c = towns[t]; return '<tr><td>' + esc(t) + '</td><td>' + c.site + '</td><td>' + c.place + '</td><td>' + c.elder + '</td></tr>'; }).join('') +
+      '</tbody></table></div></section>';
+
+    // 耆老訪談資料一覽
+    var sorts = { id: '依編號', birth: '依出生年', photos: '依照片數', audio: '依錄音長度' };
+    var rows = D.elders.slice();
+    var val = {
+      id: null,
+      birth: function (e) { return parseInt(e.birth, 10) || 9999; },
+      photos: function (e) { return -have(e.photos).length; },
+      audio: function (e) { var v = audioSec(e); return v == null ? 1 : -v; }
+    };
+    rows.sort(ovSort === 'id' ? byId : function (a, b) { return val[ovSort](a) - val[ovSort](b) || byId(a, b); });
+    h += '<section class="section"><div class="sec-head"><h2>耆老訪談資料一覽 <small>' + rows.length + ' 位</small></h2>' +
+      '<label class="sr" for="ov-sort">排序</label><span class="chip-select"><select id="ov-sort">' +
+      Object.keys(sorts).map(function (k) { return '<option value="' + k + '"' + (k === ovSort ? ' selected' : '') + '>' + sorts[k] + '</option>'; }).join('') +
+      '</select></span></div>' +
+      '<div class="tbl-wrap"><table class="tbl num ov-elders"><thead><tr><th>編號</th><th>性別</th><th>出生年</th><th>居住</th><th>照片</th><th>錄音長度</th><th>文字稿</th><th>談到的古蹟</th><th>提及地名</th></tr></thead><tbody>' +
+      rows.map(function (e) {
+        var nP = have(e.photos).length, nD = have(e.docs).length;
+        var nPl = (e.places || []).length + (e.placesUnlinked || []).length;
+        return '<tr data-href="#/elder/' + enc(e.id) + '" tabindex="0"><td><a href="#/elder/' + enc(e.id) + '">' + esc(e.name || e.id) + '</a></td>' +
+          '<td>' + esc(e.gender || '—') + '</td><td>' + esc(e.birth ? String(e.birth).slice(0, 4) : '—') + '</td><td>' + esc(district(e.residence) || '—') + '</td>' +
+          '<td>' + (nP || '—') + '</td><td>' + (have(e.audio).length ? hms(audioSec(e)) : '—') + '</td><td>' + (nD ? '✓' : '—') + '</td>' +
+          '<td>' + ((e.sites || []).length || '—') + '</td><td>' + (nPl || '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div></section>';
+
+    // 原始資料下載
+    if ((D.sources || []).length) h += '<section class="section"><h2>原始資料下載</h2><div class="tbl-wrap"><table class="tbl"><tbody>' +
+      D.sources.map(function (f) {
+        return '<tr><td class="fn">' + esc(f.name) + '</td><td class="sz">' + size(f.size) + '</td><td class="dl"><a href="' + esc(f.src) + '" download="' + esc(f.name) + '">下載</a></td></tr>';
+      }).join('') + '</tbody></table></div></section>';
+
+    app.innerHTML = h + '</section>';
+  }
+
+  app.addEventListener('change', function (e) {
+    if (e.target.id !== 'ov-sort') return;
+    ovSort = e.target.value;
+    renderOverview();
+    document.getElementById('ov-sort').focus();
+  });
+  app.addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-href]');
+    if (tr && !e.target.closest('a')) location.hash = tr.dataset.href;
+  });
+  app.addEventListener('keydown', function (e) {
+    var tr = e.target.closest && e.target.closest('tr[data-href]');
+    if (tr && e.key === 'Enter') location.hash = tr.dataset.href;
+  });
+
+  // ---------- 耆老列表（清單列，依編號） ----------
+  function siteNames(e) {
+    return (e.sites || []).map(function (sid) { return siteById[sid]; }).filter(Boolean);
+  }
+  function renderElders() {
+    var items = D.elders.slice().sort(byId);
+    var h = '<section class="page list-page">' +
+      '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › 耆老</nav>' +
+      '<header class="list-head"><h1 class="title">耆老訪談 <small>' + items.length + ' 位</small></h1></header>';
+    h += items.length ? '<div class="srows elder-rows">' + items.map(function (e) {
+      var ph = (e.photos || []).filter(function (x) { return !x.missing; })[0];
+      var ss = siteNames(e);
+      return '<a class="srow" href="#/elder/' + enc(e.id) + '">' +
+        (ph ? '<img src="' + esc(ph.thumb || ph.src) + '" alt="" data-name="' + esc(ph.name) + '">' : '<span class="ph" aria-hidden="true"></span>') +
+        '<div class="bd"><div class="nm">' + esc(e.name || e.id) + ' <span class="r">' + esc(elderMeta(e)) + '</span></div>' +
+        (e.summary ? '<p class="sub">' + plain(e.summary) + '</p>' : '') +
+        (ss.length ? '<div class="meta">談到：' + ss.map(function (s) { return '<span class="site-tag"><i class="mk mk-site"></i>' + esc(s.name) + '</span>'; }).join('') + '</div>' : '') +
+        '</div></a>';
+    }).join('') + '</div>' : '<p class="empty">目前沒有耆老訪談資料。</p>';
+    app.innerHTML = h + '</section>';
+  }
+
+  // ---------- 耆老頁：上段「簡介｜照片」左右排，下段單欄往下 ----------
+  function renderElder(id) {
+    var e = elderById[id];
+    if (!e) { app.innerHTML = notFound('耆老', id); return; }
+    var photos = (e.photos || []);
+    var shown = photos.filter(function (p) { return !p.missing; });
+    var h = '<article class="page elder-page">';
+    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">首頁</a> › <a href="#/elders">耆老</a> › ' + esc(e.name || e.id) + '</nav>';
+
+    // 上段：簡介（左）＋照片（右）
+    var facts = [];
+    if (e.gender) facts.push('<dt>性別</dt><dd>' + esc(e.gender) + '</dd>');
+    if (e.birth) facts.push('<dt>出生年</dt><dd>' + esc(String(e.birth).slice(0, 4)) + '</dd>');
+    if (e.birthplace) facts.push('<dt>出生地</dt><dd>' + esc(e.birthplace) + '</dd>');
+    if (e.residence) facts.push('<dt>居住地</dt><dd>' + esc(e.residence) + '</dd>');
+    h += '<section class="elder-top' + (photos.length ? ' two' : '') + '">' +
+      '<div class="elder-intro">' +
+        '<div class="kicker">耆老訪談</div>' +
+        '<h1 class="title">' + esc(e.name || e.id) + '</h1>' +
+        (e.name ? '<div class="roman">' + esc(e.id) + '</div>' : '') +
+        (facts.length ? '<dl class="facts">' + facts.join('') + '</dl>' : '') +
+        (e.summary ? '<div class="sum-block"><h2>訪談重點</h2>' + e.summary.split('\n').map(function (t) { return '<p class="prose">' + text(t) + '</p>'; }).join('') + '</div>' : '') +
+      '</div>';
+    if (photos.length) {
+      var first = shown[0];
+      h += '<div class="elder-gallery">' +
+        (first ? '<button type="button" class="eg-main" data-photos="' + esc(e.id) + '" data-i="0" aria-label="放大照片">' +
+                   '<img id="eg-img" src="' + esc(first.src) + '" alt="' + esc(e.id) + ' 的照片" data-name="' + esc(first.name) + '">' +
+                   (shown.length > 1 ? '<span class="count" id="eg-count">1 / ' + shown.length + '</span>' : '') + '</button>'
+               : placeholder('IMG', 'eg-main', photos[0].name));
+      if (photos.length > 1) {
+        var j = 0;
+        h += '<div class="eg-thumbs">' + photos.map(function (p) {
+          if (p.missing) return placeholder('IMG', 'eg-thumb', p.name);
+          var i = j++;
+          return '<button type="button" class="eg-thumb" data-eg="' + i + '" aria-current="' + (i === 0) + '" aria-label="第 ' + (i + 1) + ' 張">' +
+            '<img src="' + esc(p.thumb || p.src) + '" alt="" data-name="' + esc(p.name) + '"></button>';
+        }).join('') + '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</section>';
+
+    // 下段：單欄往下
+    h += '<section class="section"><h2>訪談錄音</h2>' +
+      (e.audio && e.audio.length ? e.audio.map(function (a) { return audio(a); }).join('') : placeholder('AUDIO', 'audio-missing', '')) + '</section>';
+
+    var ss = siteNames(e);
+    if (ss.length) h += '<section class="section"><h2>談到的古蹟 <small>' + ss.length + ' 處</small></h2><div class="rel">' +
+      ss.map(function (s) { return siteRow(s, null, false); }).join('') + '</div></section>';
+
+    var tags = (e.places || []).map(function (pid) {
+      var p = placeById[pid];
+      return p ? '<a class="chip" href="#/place/' + enc(p.id) + '"><i class="mk mk-place"></i>' + esc(p.name) + (p.tailo ? ' <span class="r">' + esc(p.tailo) + '</span>' : '') + '</a>' : '';
+    }).concat((e.placesUnlinked || []).map(function (t) { return '<span class="chip plain" title="地名資料庫未收錄">' + esc(t) + '</span>'; }));
+    if (tags.length) h += '<section class="section"><h2>提到的地名 <small>' + tags.length + ' 個</small></h2><div class="mentions big">' + tags.join('') + '</div></section>';
+
+    var docs = e.docs || [];
+    if (docs.length) {
+      h += '<section class="section"><h2>文字稿</h2>';
+      docs.forEach(function (d) {
+        if (d.missing) { h += placeholder('IMG', 'doc-missing', d.name).replace('照片未提供', '文字稿未提供'); return; }
+        h += '<div class="doc-head"><span class="note">' + esc(d.name) + '</span><a class="btn" href="' + esc(d.src) + '" download>原始 Word 檔</a></div>';
+        if (d.text) h += '<div class="transcript full">' + d.text.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>';
+      });
+      h += '</section>';
+    }
+    h += filesBlock([['照片', e.photos], ['錄音', e.audio], ['文字稿', e.docs]]) + rawBlock(e.raws);
+    h += '</article>';
+    app.innerHTML = h;
+
+    var th = app.querySelector('.eg-thumbs');
+    if (th) th.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-eg]');
+      if (!b) return;
+      ev.stopPropagation();
+      var i = +b.dataset.eg, p = shown[i];
+      var img = document.getElementById('eg-img');
+      img.src = p.src; img.dataset.name = p.name;
+      img.parentNode.dataset.i = i;
+      var c = document.getElementById('eg-count');
+      if (c) c.textContent = (i + 1) + ' / ' + shown.length;
+      th.querySelectorAll('[data-eg]').forEach(function (x) { x.setAttribute('aria-current', x === b); });
+    });
+    window.scrollTo(0, 0);
+  }
+
   function placeRow(p, m, inferred) {
     return '<a class="item" href="#/place/' + enc(p.id) + '"><i class="mk mk-place"></i><div>' +
       '<div class="nm">' + esc(p.name) + (p.tailo ? ' <span class="r">' + esc(p.tailo) + '</span>' : '') + '</div>' +
       (p.intro ? '<div class="sub">' + esc(isExample(p.intro) ? p.intro.slice(EXAMPLE.length) : p.intro) + '</div>' : '') +
-      '</div><span class="d">' + (m != null ? meters(m) : '') + (inferred ? '<br><small>距離推算</small>' : '') + '</span></a>';
+      '</div><span class="d">' + (m != null ? '直線 ' + meters(m) : '') + '</span></a>';
   }
 
   // ---------- 路由 ----------
@@ -851,6 +1079,23 @@
       var s = siteById[r.id];
       document.title = (s ? s.name : '古蹟') + '｜嘉義古蹟與古地名';
       renderSite(r.id, r.query);
+      return;
+    }
+    if (r.view === 'overview') {
+      document.title = '成果總覽｜嘉義古蹟與古地名';
+      renderOverview();
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (r.view === 'elders') {
+      document.title = '耆老訪談｜嘉義古蹟與古地名';
+      renderElders();
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (r.view === 'elder') {
+      document.title = (r.id || '耆老') + '｜嘉義古蹟與古地名';
+      renderElder(r.id);
       return;
     }
     if (r.view === 'sites' || r.view === 'places') {
@@ -889,8 +1134,10 @@
 
   var foot = document.createElement('footer');
   foot.className = 'foot';
-  foot.textContent = '地名 ' + D.places.length +
-    ' 筆、古蹟 ' + D.sites.length + ' 處、耆老訪談 ' + D.elders.length + ' 位';
+  foot.innerHTML = '<span>地名 ' + D.places.length + ' 筆、古蹟 ' + D.sites.length + ' 處、耆老訪談 ' + D.elders.length + ' 位</span>' +
+    ((D.sources || []).length ? '<span class="srcs">原始資料下載：' + D.sources.map(function (f) {
+      return '<a href="' + esc(f.src) + '" download="' + esc(f.name) + '">' + esc(f.name.replace(/\.xlsx$/i, '')) + '</a>';
+    }).join('') + '</span>' : '');
   document.body.appendChild(foot);
 
   window.addEventListener('hashchange', render);
