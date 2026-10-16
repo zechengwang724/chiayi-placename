@@ -1,6 +1,10 @@
 # chiayi-placename
 
-嘉義古蹟與古地名網站雛形。靜態網頁，不需要伺服器，直接用瀏覽器打開 `index.html` 即可瀏覽。
+嘉義古蹟與古地名網站雛形。
+
+**👉 線上瀏覽：https://zechengwang724.github.io/chiayi-placename/**
+
+靜態網頁，不需要伺服器，直接用瀏覽器打開 `index.html` 即可瀏覽。
 
 > 目前內容皆為**範例資料**：耆老為虛構人物，照片為示意圖，錄音為合成語音。
 
