@@ -78,11 +78,21 @@
   }
 
   // ---------- 地圖頁 ----------
+  // 底圖：依選單順序排列，第一個為預設
+  var NLSC = '底圖：內政部國土測繪中心';
+  var SINICA = '歷史地圖：中央研究院人社中心 GIS 專題中心';
+  function sinica(id, fmt) { return 'https://gis.sinica.edu.tw/tileserver/file-exists.php?img=' + id + '-' + fmt + '-{z}-{x}-{y}'; }
   var TILES = {
-    emap:  { name: '電子地圖', url: 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}' },
-    photo: { name: '空照圖',   url: 'https://wmts.nlsc.gov.tw/wmts/PHOTO2/default/GoogleMapsCompatible/{z}/{y}/{x}' }
+    gray:  { name: '電子地圖', attr: NLSC, url: 'https://wmts.nlsc.gov.tw/wmts/EMAP01/default/GoogleMapsCompatible/{z}/{y}/{x}' },
+    photo: { name: '航照',   attr: NLSC, url: 'https://wmts.nlsc.gov.tw/wmts/PHOTO2/default/GoogleMapsCompatible/{z}/{y}/{x}' },
+    jm1904: { name: '1904 堡圖',   attr: SINICA, url: sinica('JM20K_1904', 'jpg'), native: 17 },
+    jm1921: { name: '1921 堡圖',   attr: SINICA, url: sinica('JM20K_1921', 'jpg'), native: 17 },
+    jm1944: { name: '1944 地形圖', attr: SINICA, url: sinica('JM25K_1944', 'png'), native: 17 },
+    tm1955: { name: '1955 省圖',   attr: SINICA, url: sinica('TM25K_1955', 'png'), native: 17 }
   };
+  var TILE_ORDER = Object.keys(TILES);
   var M = null;   // 目前的地圖狀態
+  var pendingQ = '';  // 從頂端搜尋框帶進來、地圖尚未建立時暫存的關鍵字
 
   function key(type, id) { return type + ':' + id; }
 
@@ -93,10 +103,14 @@
           '<div class="map-el" id="map"></div>' +
           '<div class="offline" id="offline" hidden>目前沒有網路，底圖無法顯示。標記和資料仍可正常瀏覽。</div>' +
           '<div class="map-legend">' +
-            '<span><i class="mk mk-site"></i>古蹟</span><span><i class="mk mk-place"></i>古地名</span>' +
-            '<span class="sep"></span>' +
-            '<button type="button" class="chip" data-tile="emap" aria-pressed="true">電子地圖</button>' +
-            '<button type="button" class="chip" data-tile="photo" aria-pressed="false">空照圖</button>' +
+            '<div class="box legend-box" aria-label="圖例">' +
+              '<span><i class="mk mk-site"></i>古蹟</span><span><i class="mk mk-place"></i>古地名</span>' +
+            '</div>' +
+            '<div class="box tiles" role="group" aria-label="底圖">' +
+            TILE_ORDER.map(function (k, i) {
+              return '<button type="button" class="chip" data-tile="' + k + '" aria-pressed="' + (i === 0) + '">' + TILES[k].name + '</button>';
+            }).join('') +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<aside class="home-panel" id="panel" aria-live="polite"></aside>' +
@@ -108,15 +122,17 @@
 
     var errors = 0;
     var layers = {};
-    Object.keys(TILES).forEach(function (k) {
-      layers[k] = L.tileLayer(TILES[k].url, { maxZoom: 18, attribution: '底圖：內政部國土測繪中心' });
+    TILE_ORDER.forEach(function (k) {
+      var t = TILES[k];
+      layers[k] = L.tileLayer(t.url, { maxZoom: 18, maxNativeZoom: t.native || 18, attribution: t.attr });
       layers[k].on('tileerror', function () { if (++errors > 3) document.getElementById('offline').hidden = false; });
       layers[k].on('tileload', function () { errors = 0; document.getElementById('offline').hidden = true; });
     });
-    layers.emap.addTo(map);
+    layers[TILE_ORDER[0]].addTo(map);
 
-    M = { map: map, layers: layers, tile: 'emap', markers: {}, lines: L.layerGroup().addTo(map),
-          filter: 'all', town: '', sel: null };
+    M = { map: map, layers: layers, tile: TILE_ORDER[0], markers: {}, lines: L.layerGroup().addTo(map),
+          filter: 'all', town: '', q: pendingQ || '', sel: null };
+    pendingQ = '';
 
     function addMarker(type, x) {
       if (!hasPos(x)) return;
@@ -124,10 +140,12 @@
         icon: L.divIcon({ className: 'mk-wrap', html: '<i class="mk mk-' + type + '"></i>', iconSize: [16, 16], iconAnchor: [8, 8] }),
         title: x.name, keyboard: true, riseOnHover: true
       });
-      m.bindTooltip(esc(x.name), { permanent: true, direction: 'right', offset: [10, 0], className: 'lbl' });
+      // interactive：點名稱標籤也會觸發標記的 click／hover
+      m.bindTooltip(esc(x.name), { permanent: true, interactive: true, direction: 'right', offset: [10, 0], className: 'lbl' });
       m.on('click', function () { location.hash = '#/map/' + type + '/' + enc(x.id); });
-      m.on('mouseover', function () { hl(type, x.id, true); });
-      m.on('mouseout', function () { hl(type, x.id, false); });
+      // 滑到標記或名稱標籤：標記、標籤、清單項目一起亮
+      m.on('mouseover', function () { hover(key(type, x.id), true); });
+      m.on('mouseout', function () { hover(key(type, x.id), false); });
       m.addTo(map);
       M.markers[key(type, x.id)] = { m: m, type: type, x: x };
     }
@@ -161,17 +179,24 @@
     });
     panel.addEventListener('mouseover', function (e) {
       var a = e.target.closest('[data-key]');
-      if (a) markerEl(a.dataset.key, function (el) { el.classList.add('hover'); });
+      if (a) hover(a.dataset.key, true);
     });
     panel.addEventListener('mouseout', function (e) {
       var a = e.target.closest('[data-key]');
-      if (a) markerEl(a.dataset.key, function (el) { el.classList.remove('hover'); });
+      if (a) hover(a.dataset.key, false);
+    });
+    panel.addEventListener('input', function (e) {
+      if (e.target.id !== 'panel-q') return;
+      M.q = e.target.value.trim();
+      document.getElementById('head-q').value = M.q;
+      applyFilter(); renderList();
     });
     panel.addEventListener('submit', function (e) {
       if (e.target.id !== 'panel-search') return;
       e.preventDefault();
-      var q = document.getElementById('panel-q').value.trim();
-      if (q) location.hash = '#/search?q=' + enc(q);
+      // 按 Enter：只有一筆結果時直接打開
+      var hits = Object.keys(M.markers).filter(function (k) { return visible(M.markers[k]); });
+      if (hits.length === 1) location.hash = '#/map/' + M.markers[hits[0]].type + '/' + enc(M.markers[hits[0]].x.id);
     });
   }
 
@@ -186,15 +211,32 @@
     var el = o && o.m.getElement();
     if (el) fn(el.querySelector('.mk'), el);
   }
-  function hl(type, id, on) {
-    var a = document.querySelector('#panel [data-key="' + key(type, id) + '"]');
-    if (a) a.classList.toggle('hl', on);
+  function hover(k, on) {
+    var o = M && M.markers[k];
+    if (!o) return;
+    markerEl(k, function (el) { el.classList.toggle('hover', on); });
+    var tip = o.m.getTooltip() && o.m.getTooltip().getElement();
+    if (tip) tip.classList.toggle('hover', on);
+    document.querySelectorAll('#panel [data-key="' + k + '"]').forEach(function (a) { a.classList.toggle('hl', on); });
   }
 
+  // 搜尋用：去掉聲調符號、連字號、空白，大小寫不分
+  function fold(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ·͘]/g, '')
+      .replace(/ⁿ/g, 'n').toLowerCase().replace(/[\s\-‐–·.]/g, '');
+  }
+  function haystack(x) {
+    if (!x._hay) x._hay = fold([x.name, x.tailo, x.poj, x.hanyu, x.county, x.town, x.village, x.intro].join('|'));
+    return x._hay;
+  }
+  function matches(x) {
+    var q = fold(M.q);
+    return !q || haystack(x).indexOf(q) >= 0;
+  }
   function visible(o) {
     if (M.filter !== 'all' && o.type !== M.filter) return false;
     if (M.town && o.x.town !== M.town) return false;
-    return true;
+    return matches(o.x);
   }
   function applyFilter() {
     Object.keys(M.markers).forEach(function (k) {
@@ -221,21 +263,30 @@
 
   function renderList() {
     var panel = document.getElementById('panel');
+    if (!document.getElementById('list-box')) {
+      // 面板外框只畫一次，之後只更新清單，輸入框才不會在打字時被重畫
+      var f = function (v, label) { return '<button type="button" class="chip" data-filter="' + v + '" aria-pressed="' + (M.filter === v) + '">' + label + '</button>'; };
+      panel.innerHTML =
+        '<h1>嘉義古蹟與古地名</h1>' +
+        '<p class="lead">嘉義市的古蹟、古地名與耆老口述紀錄。點選地圖上的標記，或從下方清單查看。</p>' +
+        '<div class="counts"><span><b>' + D.sites.length + '</b>處古蹟</span><span><b>' + D.places.length + '</b>筆古地名</span><span><b>' + D.elders.length + '</b>位耆老訪談</span></div>' +
+        '<form id="panel-search" role="search"><label class="sr" for="panel-q">搜尋</label>' +
+          '<input id="panel-q" type="search" class="panel-q" autocomplete="off" placeholder="搜尋地名、古蹟、拼音" value="' + esc(M.q) + '"></form>' +
+        '<div class="filters">' + f('all', '全部') + f('site', '古蹟') + f('place', '古地名') +
+          '<label class="sr" for="town">鄉鎮</label><span class="chip-select"><select id="town"><option value="">全部鄉鎮</option>' +
+          towns().map(function (t) { return '<option' + (t === M.town ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') +
+          '</select></span></div>' +
+        '<div id="list-box"></div>';
+    }
+    panel.querySelectorAll('[data-filter]').forEach(function (b) { b.setAttribute('aria-pressed', M.filter === b.dataset.filter); });
+    var cs = panel.querySelector('.chip-select');
+    if (cs) cs.classList.toggle('on', !!M.town);
     var items = [];
-    if (M.filter !== 'place') D.sites.forEach(function (s) { if (!M.town || s.town === M.town) items.push(listItem('site', s)); });
-    if (M.filter !== 'site') D.places.forEach(function (p) { if (!M.town || p.town === M.town) items.push(listItem('place', p)); });
-    var f = function (v, label) { return '<button type="button" class="chip" data-filter="' + v + '" aria-pressed="' + (M.filter === v) + '">' + label + '</button>'; };
-    panel.innerHTML =
-      '<h1>嘉義古蹟與古地名</h1>' +
-      '<p class="lead">嘉義市的古蹟、古地名與耆老口述紀錄。點選地圖上的標記，或從下方清單查看。</p>' +
-      '<div class="counts"><span><b>' + D.sites.length + '</b>處古蹟</span><span><b>' + D.places.length + '</b>筆古地名</span><span><b>' + D.elders.length + '</b>位耆老訪談</span></div>' +
-      '<form id="panel-search" role="search"><label class="sr" for="panel-q">搜尋</label>' +
-        '<input id="panel-q" type="search" class="panel-q" placeholder="搜尋地名、古蹟、訪談內容"></form>' +
-      '<div class="filters">' + f('all', '全部') + f('site', '古蹟') + f('place', '古地名') +
-        '<label class="sr" for="town">鄉鎮</label><select id="town"><option value="">全部鄉鎮</option>' +
-        towns().map(function (t) { return '<option' + (t === M.town ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') +
-        '</select></div>' +
-      (items.length ? '<ul class="list">' + items.join('') + '</ul>' : '<p class="empty">沒有符合條件的資料。</p>');
+    if (M.filter !== 'place') D.sites.forEach(function (s) { if ((!M.town || s.town === M.town) && matches(s)) items.push(listItem('site', s)); });
+    if (M.filter !== 'site') D.places.forEach(function (p) { if ((!M.town || p.town === M.town) && matches(p)) items.push(listItem('place', p)); });
+    var box = document.getElementById('list-box');
+    box.innerHTML = (M.q ? '<p class="result-n">找到 ' + items.length + ' 筆' + (items.length ? '' : '。試試其他關鍵字，或清除篩選條件') + '</p>' : '') +
+      (items.length ? '<ul class="list">' + items.join('') + '</ul>' : (M.q ? '' : '<p class="empty">沒有符合條件的資料。</p>'));
   }
 
   function relRow(type, x, extra) {
@@ -315,7 +366,9 @@
     Object.keys(M.markers).forEach(function (k) {
       markerEl(k, function (el, wrap) { el.classList.remove('sel', 'dim'); wrap.classList.remove('on'); });
     });
-    if (!x) { M.sel = null; renderList(); return; }
+    if (!x) { M.sel = null; applyFilter(); renderList(); return; }
+    // 看單筆內容時顯示全部標記，關聯的點才不會被搜尋條件藏起來
+    Object.keys(M.markers).forEach(function (k) { if (!M.map.hasLayer(M.markers[k].m)) M.markers[k].m.addTo(M.map); });
 
     var related = renderDetail(type, x);
     var k = key(type, id);
@@ -332,7 +385,10 @@
     related.forEach(function (r) {
       if (!hasPos(r[1]) || !hasPos(x)) return;
       pts.push([r[1].lat, r[1].lng]);
-      L.polyline([[x.lat, x.lng], [r[1].lat, r[1].lng]], { className: 'rel-line', weight: 2, dashArray: '6 6', interactive: false }).addTo(M.lines);
+      // 白色外框＋鮮明色虛線，在白底或線條很多的歷史地圖上都看得清楚
+      var seg = [[x.lat, x.lng], [r[1].lat, r[1].lng]];
+      L.polyline(seg, { color: '#FFFFFF', weight: 8, opacity: 0.95, lineCap: 'round', interactive: false }).addTo(M.lines);
+      L.polyline(seg, { color: '#1A2224', weight: 4, opacity: 1, dashArray: '10 8', lineCap: 'round', interactive: false }).addTo(M.lines);
     });
     if (pts.length === 1) M.map.setView(pts[0], Math.max(M.map.getZoom(), 15));
     else if (pts.length) M.map.fitBounds(L.latLngBounds(pts), fitPad());
@@ -372,10 +428,18 @@
     window.scrollTo(0, 0);
   }
 
+  // 頂端搜尋框：回到地圖清單，把關鍵字帶進面板
   document.getElementById('head-search').addEventListener('submit', function (e) {
     e.preventDefault();
     var q = document.getElementById('head-q').value.trim();
-    if (q) location.hash = '#/search?q=' + enc(q);
+    if (M) {
+      M.q = q;
+      if (location.hash.replace(/^#\/?/, '') === '') { applyFilter(); renderList(); }
+      else location.hash = '#/';
+    } else {
+      pendingQ = q;
+      location.hash = '#/';
+    }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && M && M.sel) location.hash = '#/';

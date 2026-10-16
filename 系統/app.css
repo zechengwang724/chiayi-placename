@@ -234,7 +234,6 @@ body.is-map .foot{display:none}
 .labels-off .leaflet-tooltip.lbl{display:none}
 .labels-off .leaflet-marker-icon:hover + .leaflet-tooltip.lbl{display:block}
 .leaflet-tooltip.lbl{font-weight:500}
-.rel-line{stroke:var(--ink);opacity:.6}
 .map-legend{position:absolute;right:12px;bottom:28px;z-index:500;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;
   background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:6px 12px;font-size:13px;color:var(--muted)}
 .map-legend span{display:inline-flex;align-items:center;gap:6px}
@@ -275,3 +274,25 @@ body.is-map .foot{display:none}
 .missing small{font-size:11px;opacity:.8;word-break:break-all}
 .missing.pd-photo{aspect-ratio:3/2;width:100%}
 .missing.audio-missing{flex-direction:row;gap:10px;padding:8px 12px;justify-content:flex-start;min-height:0}
+.map-legend .tiles{display:flex;flex-wrap:wrap;gap:6px}
+.map-legend{max-width:calc(100% - 24px)}
+/* 圖例與底圖分成兩個獨立的框，上下排列 */
+.map-legend{background:none;border:0;padding:0;flex-direction:column;align-items:flex-end;gap:8px}
+.map-legend .box{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:6px 12px}
+.map-legend .tiles{gap:6px;padding:6px}
+.leaflet-tooltip.lbl{cursor:pointer}
+.leaflet-tooltip.lbl.hover{border-color:#1A2224}
+/* 名稱標籤外框加粗 */
+.leaflet-tooltip.lbl{border:2px solid #9AA6A3}
+.leaflet-tooltip.lbl.hover{border-color:#1A2224}
+.result-n{font-size:13px;color:var(--muted);padding-bottom:4px}
+
+/* 鄉鎮下拉：做成跟篩選按鈕一樣的膠囊樣式 */
+.chip-select{position:relative;display:inline-flex}
+.chip-select select{appearance:none;-webkit-appearance:none;font:inherit;font-size:13px;line-height:1.7;
+  border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:20px;padding:2px 30px 2px 12px;cursor:pointer;margin:0}
+.chip-select::after{content:"";position:absolute;right:13px;top:50%;width:6px;height:6px;margin-top:-5px;
+  border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);pointer-events:none;color:var(--muted)}
+.chip-select select:hover{border-color:var(--muted)}
+.chip-select.on select{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.chip-select.on::after{color:var(--surface)}
