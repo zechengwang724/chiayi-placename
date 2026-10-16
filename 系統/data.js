@@ -1,5 +1,5 @@
 window.SITE_DATA = {
- "generated": "2026-10-16 23:11",
+ "generated": "2026-10-16 23:20",
  "sources": [
   {
    "name": "嘉義古蹟資料庫_1150608.xlsx",

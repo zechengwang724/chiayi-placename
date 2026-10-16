@@ -412,6 +412,7 @@ def main():
                     if f.lower().endswith('.xlsx') and not f.startswith('~$')],
         'places': places, 'sites': sites, 'elders': elders,
     }
+    stamp_index()
     with open(os.path.join(SYS, 'data.js'), 'w', encoding='utf-8') as f:
         f.write('window.SITE_DATA = ')
         json.dump(data, f, ensure_ascii=False, indent=1)
@@ -423,6 +424,19 @@ def main():
     with open(os.path.join(SYS, '檢查報告.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     print('\n'.join(lines))
+
+
+def stamp_index():
+    """在 index.html 引用的程式、樣式、資料後面加上版本號（?v=時間），
+    瀏覽器才不會拿快取裡的舊檔案和新檔案混用。"""
+    path = os.path.join(ROOT, 'index.html')
+    with open(path, encoding='utf-8') as f:
+        html = f.read()
+    v = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    new = re.sub(r'(系統/(?:app\.js|app\.css|data\.js))(\?v=\d+)?', r'\1?v=' + v, html)
+    if new != html:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(new)
 
 
 if __name__ == '__main__':
