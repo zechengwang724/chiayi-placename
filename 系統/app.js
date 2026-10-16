@@ -93,6 +93,10 @@
     tm1955: { name: '1955 二萬五千分一臺灣省圖',   attr: SINICA, url: sinica('TM25K_1955', 'png'), native: 17 }
   };
   var TILE_ORDER = Object.keys(TILES);
+  // 目前選用的底圖：全站共用（大地圖、古蹟頁、地名頁的小地圖），並記住到下次開啟
+  var currentTile = TILE_ORDER[0];
+  try { var savedTile = localStorage.getItem('baseMap'); if (TILES[savedTile]) currentTile = savedTile; } catch (e) {}
+  function setTile(k) { currentTile = k; try { localStorage.setItem('baseMap', k); } catch (e) {} }
   var M = null;   // 目前的地圖狀態
   var pendingQ = '';  // 從頂端搜尋框帶進來、地圖尚未建立時暫存的關鍵字
 
@@ -110,7 +114,7 @@
             '</div>' +
             '<div class="box tiles" role="group" aria-labelledby="tiles-h"><div class="tiles-h" id="tiles-h">底圖</div>' +
             TILE_ORDER.map(function (k, i) {
-              return '<button type="button" class="tile-opt" data-tile="' + k + '" aria-pressed="' + (i === 0) + '">' + TILES[k].name + '</button>';
+              return '<button type="button" class="tile-opt" data-tile="' + k + '" aria-pressed="' + (k === currentTile) + '">' + TILES[k].name + '</button>';
             }).join('') +
             '</div>' +
           '</div>' +
@@ -130,9 +134,9 @@
       layers[k].on('tileerror', function () { if (++errors > 3) document.getElementById('offline').hidden = false; });
       layers[k].on('tileload', function () { errors = 0; document.getElementById('offline').hidden = true; });
     });
-    layers[TILE_ORDER[0]].addTo(map);
+    layers[currentTile].addTo(map);
 
-    M = { map: map, layers: layers, tile: TILE_ORDER[0], markers: {}, lines: L.layerGroup().addTo(map),
+    M = { map: map, layers: layers, tile: currentTile, markers: {}, lines: L.layerGroup().addTo(map),
           filter: 'all', town: '', q: pendingQ || '', sel: null };
     pendingQ = '';
 
@@ -167,6 +171,7 @@
       if (!b || b.dataset.tile === M.tile) return;
       map.removeLayer(layers[M.tile]);
       M.tile = b.dataset.tile;
+      setTile(M.tile);
       layers[M.tile].addTo(map);
       app.querySelectorAll('[data-tile]').forEach(function (x) { x.setAttribute('aria-pressed', x.dataset.tile === M.tile); });
     });
@@ -447,8 +452,8 @@
     if (!el || !hasPos(main)) return;
     var map = L.map(el, { zoomControl: true, scrollWheelZoom: false, attributionControl: true });
     map.attributionControl.setPrefix(false);
-    var t = TILES[TILE_ORDER[0]];
-    L.tileLayer(t.url, { maxZoom: 18, attribution: t.attr }).addTo(map);
+    var t = TILES[currentTile];
+    L.tileLayer(t.url, { maxZoom: 18, maxNativeZoom: t.native || 18, attribution: t.attr }).addTo(map);
     var pts = [[main.lat, main.lng]];
     rel.forEach(function (r) {
       if (!hasPos(r[1])) return;
