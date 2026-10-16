@@ -1,5 +1,5 @@
 window.SITE_DATA = {
- "generated": "2026-10-16 22:19",
+ "generated": "2026-10-16 22:39",
  "radius": 1000,
  "places": [
   {

@@ -113,6 +113,8 @@
               '<span><i class="mk mk-site"></i>古蹟</span><span><i class="mk mk-place"></i>古地名</span>' +
             '</div>' +
             '<div class="box tiles" role="group" aria-labelledby="tiles-h"><div class="tiles-h" id="tiles-h">底圖</div>' +
+            // 手機版：平常只顯示目前底圖，點了才展開清單
+            '<button type="button" class="tiles-toggle" aria-expanded="false"><span class="lab">底圖</span><span class="cur">' + TILES[currentTile].name + '</span></button>' +
             TILE_ORDER.map(function (k, i) {
               return '<button type="button" class="tile-opt" data-tile="' + k + '" aria-pressed="' + (k === currentTile) + '">' + TILES[k].name + '</button>';
             }).join('') +
@@ -167,7 +169,11 @@
     labels();
 
     app.querySelector('.tiles').addEventListener('click', function (e) {
+      var box = e.currentTarget;
+      var tg = e.target.closest('.tiles-toggle');
+      if (tg) { var open = !box.classList.contains('open'); box.classList.toggle('open', open); tg.setAttribute('aria-expanded', open); return; }
       var b = e.target.closest('[data-tile]');
+      if (b) { box.classList.remove('open'); box.querySelector('.tiles-toggle').setAttribute('aria-expanded', 'false'); box.querySelector('.tiles-toggle .cur').textContent = TILES[b.dataset.tile].name; }
       if (!b || b.dataset.tile === M.tile) return;
       map.removeLayer(layers[M.tile]);
       M.tile = b.dataset.tile;
@@ -278,7 +284,7 @@
         '<p class="lead">嘉義市的古蹟、古地名與耆老口述紀錄。點選地圖上的標記，或從下方清單查看。</p>' +
         '<div class="counts"><span><b>' + D.sites.length + '</b>處古蹟</span><span><b>' + D.places.length + '</b>筆古地名</span><span><b>' + D.elders.length + '</b>位耆老訪談</span></div>' +
         '<form id="panel-search" role="search"><label class="sr" for="panel-q">搜尋</label>' +
-          '<input id="panel-q" type="search" class="panel-q" autocomplete="off" placeholder="搜尋地名、古蹟、拼音" value="' + esc(M.q) + '"></form>' +
+          '<input id="panel-q" type="search" class="panel-q" autocomplete="off" placeholder="搜尋地名、古蹟、拼音、訪談內容" value="' + esc(M.q) + '"></form>' +
         '<div class="filters">' + f('all', '全部') + f('site', '古蹟') + f('place', '古地名') +
           '<label class="sr" for="town">鄉鎮</label><span class="chip-select"><select id="town"><option value="">全部鄉鎮</option>' +
           towns().map(function (t) { return '<option' + (t === M.town ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') +
@@ -292,8 +298,41 @@
     if (M.filter !== 'place') D.sites.forEach(function (s) { if ((!M.town || s.town === M.town) && matches(s)) items.push(listItem('site', s)); });
     if (M.filter !== 'site') D.places.forEach(function (p) { if ((!M.town || p.town === M.town) && matches(p)) items.push(listItem('place', p)); });
     var box = document.getElementById('list-box');
-    box.innerHTML = (M.q ? '<p class="result-n">找到 ' + items.length + ' 筆' + (items.length ? '' : '。試試其他關鍵字，或清除篩選條件') + '</p>' : '') +
-      (items.length ? '<ul class="list">' + items.join('') + '</ul>' : (M.q ? '' : '<p class="empty">沒有符合條件的資料。</p>'));
+    var talk = M.q ? elderHits(M.q) : [];
+    var n = items.length + talk.length;
+    box.innerHTML = (M.q ? '<p class="result-n">找到 ' + n + ' 筆' + (n ? '' : '。試試其他關鍵字，或清除篩選條件') + '</p>' : '') +
+      (items.length ? '<ul class="list">' + items.join('') + '</ul>' : (M.q ? '' : '<p class="empty">沒有符合條件的資料。</p>')) +
+      (talk.length ? '<h3 class="hits-h">訪談內容 <small>' + talk.length + ' 位耆老</small></h3><ul class="hits">' + talk.join('') + '</ul>' : '');
+  }
+
+  // 訪談內容搜尋：耆老摘要＋文字稿全文；結果連到古蹟頁上的那張耆老卡片
+  function elderText(e) {
+    if (e._text == null) {
+      var doc = (e.docs || [])[0];
+      e._text = [e.summary || ''].concat(doc && doc.text ? doc.text : []).join('\n').replace(EXAMPLE, '');
+      e._hay = fold(e._text);
+    }
+    return e._text;
+  }
+  function snippet(t, q) {
+    var i = t.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return esc(t.slice(0, 60)) + (t.length > 60 ? '…' : '');
+    var a = Math.max(0, i - 24), b = Math.min(t.length, i + q.length + 36);
+    return (a ? '…' : '') + esc(t.slice(a, i)) + '<mark>' + esc(t.slice(i, i + q.length)) + '</mark>' + esc(t.slice(i + q.length, b)) + (b < t.length ? '…' : '');
+  }
+  function elderHits(q) {
+    var fq = fold(q);
+    if (!fq) return [];
+    return D.elders.filter(function (e) {
+      if (M.town && !(siteById[e.site] && siteById[e.site].town === M.town)) return false;
+      elderText(e);
+      return e._hay.indexOf(fq) >= 0;
+    }).map(function (e) {
+      var s = siteById[e.site];
+      var href = s ? '#/site/' + enc(s.id) + '?e=' + enc(e.id) : '#/';
+      return '<li><a href="' + href + '"><span class="t">' + esc(e.id) + (s ? '<span class="from">' + esc(s.name) + '</span>' : '') + '</span>' +
+        '<span class="s">' + snippet(e._text.replace(/\n+/g, ' '), q) + '</span></a></li>';
+    });
   }
 
   function relRow(type, x, extra) {
