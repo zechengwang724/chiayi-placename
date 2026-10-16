@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+"""讀取「資料庫」資料夾中的三個 Excel，產生網頁用的資料檔 系統/data.js。
+
+只用 Python 內建模組，不需安裝任何套件。
+用法：在網站根目錄執行  python3 系統/build.py
+"""
+import datetime
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+import zipfile
+
+# ---------- 設定 ----------
+SHOW_ELDER_NAME = False      # 是否在網頁上顯示耆老姓名
+NEARBY_RADIUS_M = 1000       # 自動列為「附近」的距離（公尺）
+THUMB_SIZE = 480             # 縮圖長邊（像素）
+SPLIT = re.compile(r'[、,，;；/\n]+')
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SYS = os.path.join(ROOT, '系統')
+DB_DIR = os.path.join(ROOT, '資料庫')
+MEDIA_DIRS = ['照片', '錄音', '文件']
+THUMB_DIR = os.path.join(SYS, '縮圖')
+
+NS = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+      'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
+W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+
+report = []
+
+
+def warn(msg):
+    report.append(msg)
+
+
+# ---------- Excel ----------
+def col_index(ref):
+    letters = re.match(r'[A-Z]+', ref).group(0)
+    n = 0
+    for ch in letters:
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def read_xlsx(path):
+    """回傳第一個工作表的 [ {標題: 值} ]。"""
+    z = zipfile.ZipFile(path)
+    names = z.namelist()
+    shared = []
+    if 'xl/sharedStrings.xml' in names:
+        for si in ET.fromstring(z.read('xl/sharedStrings.xml')).findall('m:si', NS):
+            shared.append(''.join(t.text or '' for t in si.iter('{%s}t' % NS['m'])))
+    wb = ET.fromstring(z.read('xl/workbook.xml'))
+    first = wb.find('m:sheets', NS)[0]
+    rid = first.get('{%s}id' % NS['r'])
+    rels = ET.fromstring(z.read('xl/_rels/workbook.xml.rels'))
+    target = next(r.get('Target') for r in rels if r.get('Id') == rid)
+    target = target.lstrip('/')
+    sheet_path = target if target.startswith('xl/') else 'xl/' + target
+    rows = []
+    for row in ET.fromstring(z.read(sheet_path)).iter('{%s}row' % NS['m']):
+        cells = {}
+        for c in row.findall('m:c', NS):
+            t, v = c.get('t'), c.find('m:v', NS)
+            if t == 's' and v is not None:
+                val = shared[int(v.text)]
+            elif t == 'inlineStr':
+                val = ''.join(x.text or '' for x in c.iter('{%s}t' % NS['m']))
+            else:
+                val = v.text if v is not None else ''
+            cells[col_index(c.get('r'))] = (val or '').strip()
+        rows.append(cells)
+    if not rows:
+        return []
+    header = {i: h for i, h in rows[0].items() if h}
+    out = []
+    for cells in rows[1:]:
+        rec = {header[i]: cells.get(i, '') for i in header}
+        if any(rec.values()):
+            out.append(rec)
+    return out
+
+
+def pick(rec, *candidates):
+    for c in candidates:
+        if c in rec:
+            return rec[c]
+    for c in candidates:
+        for k in rec:
+            if k.startswith(c):
+                return rec[k]
+    return ''
+
+
+def norm_id(v):
+    v = (v or '').strip()
+    if re.fullmatch(r'\d+\.0+', v):
+        v = v.split('.')[0]
+    return v
+
+
+def to_float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def year_month(v):
+    if re.fullmatch(r'\d{4,5}(\.\d+)?', v or '') and 10000 < float(v) < 80000:
+        d = datetime.date(1899, 12, 30) + datetime.timedelta(days=float(v))
+        return d.strftime('%Y-%m')
+    return v
+
+
+def split_list(v):
+    return [s.strip() for s in SPLIT.split(v or '') if s.strip()]
+
+
+def find_db(keyword):
+    for f in sorted(os.listdir(DB_DIR)):
+        if keyword in f and f.lower().endswith('.xlsx') and not f.startswith('~$'):
+            return os.path.join(DB_DIR, f)
+    warn(f'找不到檔名含「{keyword}」的 Excel')
+    return None
+
+
+# ---------- 媒體檔 ----------
+media_index = {}
+
+
+def index_media():
+    for d in MEDIA_DIRS:
+        base = os.path.join(ROOT, d)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _, files in os.walk(base):
+            for f in files:
+                if f.startswith('.'):
+                    continue
+                rel = os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, '/')
+                media_index.setdefault(f.lower(), rel)
+                media_index.setdefault(os.path.splitext(f)[0].lower(), rel)
+
+
+HAS_SIPS = shutil.which('sips') is not None
+
+
+def thumb(rel):
+    src = os.path.join(ROOT, rel)
+    name = re.sub(r'[\\/]', '_', rel)
+    name = os.path.splitext(name)[0] + '.jpg'
+    dst = os.path.join(THUMB_DIR, name)
+    if not HAS_SIPS:
+        return rel
+    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+        os.makedirs(THUMB_DIR, exist_ok=True)
+        r = subprocess.run(['sips', '-Z', str(THUMB_SIZE), '-s', 'format', 'jpeg', src, '--out', dst],
+                           capture_output=True)
+        if r.returncode != 0:
+            return rel
+    return '系統/縮圖/' + name
+
+
+def read_doc_text(rel):
+    path = os.path.join(ROOT, rel)
+    ext = os.path.splitext(rel)[1].lower()
+    try:
+        if ext == '.docx':
+            body = ET.fromstring(zipfile.ZipFile(path).read('word/document.xml'))
+            paras = []
+            for p in body.iter(W + 'p'):
+                buf = []
+                for el in p.iter():
+                    if el.tag == W + 't':
+                        buf.append(el.text or '')
+                    elif el.tag == W + 'tab':
+                        buf.append('\t')
+                    elif el.tag in (W + 'br', W + 'cr'):
+                        buf.append('\n')
+                paras.append(''.join(buf))
+            return paras
+        if ext == '.txt':
+            with open(path, encoding='utf-8', errors='replace') as f:
+                return f.read().splitlines()
+    except Exception as e:  # noqa: BLE001
+        warn(f'無法讀取文字檔 {rel}：{e}')
+    return None
+
+
+def media(name, kind, owner):
+    rel = media_index.get(name.lower()) or media_index.get(os.path.splitext(name)[0].lower())
+    if not rel:
+        warn(f'{owner}：找不到檔案「{name}」')
+        return {'name': name, 'missing': True}
+    item = {'name': name, 'src': rel}
+    if kind == 'photo':
+        item['thumb'] = thumb(rel)
+    elif kind == 'doc':
+        text = read_doc_text(rel)
+        if text is not None:
+            item['text'] = text
+    return item
+
+
+# ---------- 距離 ----------
+def dist_m(a, b):
+    if None in (a.get('lat'), a.get('lng'), b.get('lat'), b.get('lng')):
+        return None
+    R = 6371000
+    p1, p2 = math.radians(a['lat']), math.radians(b['lat'])
+    dp, dl = p2 - p1, math.radians(b['lng'] - a['lng'])
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return round(2 * R * math.asin(math.sqrt(h)))
+
+
+# ---------- 主程式 ----------
+def main():
+    index_media()
+    places, sites, elders = [], [], []
+
+    path = find_db('地名')
+    for r in read_xlsx(path) if path else []:
+        pid = norm_id(pick(r, '編號', '地名編號'))
+        name = pick(r, '地名')
+        if not name:
+            continue
+        p = {
+            'id': pid or name, 'name': name,
+            'hanyu': pick(r, '漢語拼音'), 'tailo': pick(r, '台羅', '臺羅'), 'poj': pick(r, '白話字'),
+            'county': pick(r, '縣市'), 'town': pick(r, '鄉鎮'), 'village': pick(r, '村里'),
+            'lng': to_float(pick(r, '經度')), 'lat': to_float(pick(r, '緯度')),
+            'intro': pick(r, '地名簡介', '簡介'), 'source': pick(r, '資料來源'),
+        }
+        a = pick(r, '念法錄音')
+        if a:
+            p['audio'] = media(a, 'audio', f'地名 {name}')
+        if p['lat'] is None:
+            warn(f'地名 {name}：缺少經緯度，不會出現在地圖上')
+        places.append(p)
+
+    path = find_db('古蹟')
+    for r in read_xlsx(path) if path else []:
+        sid = norm_id(pick(r, '古蹟編號'))
+        name = pick(r, '古蹟名稱')
+        if not (sid or name):
+            continue
+        s = {
+            'id': sid or name, 'name': name, 'intro': pick(r, '古蹟簡介'),
+            'tailo': pick(r, '古蹟母語拼音'), 'poj': pick(r, '古蹟白話字'),
+            'county': pick(r, '所在縣市', '縣市'), 'town': pick(r, '鄉鎮'), 'village': pick(r, '村里'),
+            'lng': to_float(pick(r, '經度')), 'lat': to_float(pick(r, '緯度')),
+            'summary': pick(r, '耆老訪談摘要'),
+            '_nearby': split_list(pick(r, '附近古地名')),
+            'photos': [media(f, 'photo', f'古蹟 {name}') for f in split_list(pick(r, '古蹟地名照片', '古蹟照片'))],
+        }
+        if s['lat'] is None:
+            warn(f'古蹟 {name}：缺少經緯度，不會出現在地圖上')
+        sites.append(s)
+
+    path = find_db('耆老')
+    for r in read_xlsx(path) if path else []:
+        eid = norm_id(pick(r, '耆老編號'))
+        if not eid:
+            continue
+        label = f'耆老 {eid}'
+        e = {
+            'id': eid, 'site': norm_id(pick(r, '古蹟編號')),
+            'birth': year_month(pick(r, '耆老生日')), 'gender': pick(r, '性別'),
+            'birthplace': pick(r, '出生地'), 'residence': pick(r, '居住地'),
+            'summary': pick(r, '訪談重點摘要'),
+            '_places': split_list(pick(r, '訪談提及地名')),
+            'photos': [media(f, 'photo', label) for f in split_list(pick(r, '耆老照片'))],
+        }
+        if SHOW_ELDER_NAME:
+            e['name'] = pick(r, '耆老姓名')
+        a = pick(r, '錄音檔名')
+        e['audio'] = [media(f, 'audio', label) for f in split_list(a)]
+        t = pick(r, '文字稿檔名')
+        e['docs'] = [media(f, 'doc', label) for f in split_list(t)]
+        elders.append(e)
+
+    # ---- 關聯 ----
+    by_place = {}
+    for p in places:
+        by_place[p['name'].replace(' ', '')] = p
+        by_place[p['id']] = p
+    site_ids = {s['id'] for s in sites}
+
+    def resolve(tokens, owner):
+        hits, plain = [], []
+        for t in tokens:
+            p = by_place.get(t.replace(' ', '')) or by_place.get(norm_id(t))
+            if p:
+                if p['id'] not in hits:
+                    hits.append(p['id'])
+            else:
+                plain.append(t)
+                warn(f'{owner}：地名「{t}」不在地名資料庫中，無法連結')
+        return hits, plain
+
+    for p in places:
+        p['sites'], p['elders'] = [], []
+    place_by_id = {p['id']: p for p in places}
+
+    for s in sites:
+        s['places'], s['placesUnlinked'] = resolve(s.pop('_nearby'), f'古蹟 {s["name"]} 附近古地名')
+        s['elders'] = []
+        for pid in s['places']:
+            place_by_id[pid]['sites'].append(s['id'])
+        # 距離推算
+        s['near'] = []
+        for p in places:
+            d = dist_m(s, p)
+            if d is not None:
+                if p['id'] in s['places'] or d <= NEARBY_RADIUS_M:
+                    s['near'].append({'id': p['id'], 'm': d})
+                if d <= NEARBY_RADIUS_M and s['id'] not in p['sites']:
+                    p.setdefault('nearSites', []).append(s['id'])
+        for p in places:
+            d = dist_m(s, p)
+            if d is not None:
+                p.setdefault('dist', {})[s['id']] = d
+
+    for e in elders:
+        if e['site'] and e['site'] not in site_ids:
+            warn(f'耆老 {e["id"]}：古蹟編號「{e["site"]}」不在古蹟資料庫中')
+        for s in sites:
+            if s['id'] == e['site']:
+                s['elders'].append(e['id'])
+        e['places'], e['placesUnlinked'] = resolve(e.pop('_places'), f'耆老 {e["id"]} 訪談提及地名')
+        for pid in e['places']:
+            place_by_id[pid]['elders'].append(e['id'])
+
+    data = {
+        'generated': datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'radius': NEARBY_RADIUS_M,
+        'places': places, 'sites': sites, 'elders': elders,
+    }
+    with open(os.path.join(SYS, 'data.js'), 'w', encoding='utf-8') as f:
+        f.write('window.SITE_DATA = ')
+        json.dump(data, f, ensure_ascii=False, indent=1)
+        f.write(';\n')
+
+    lines = [f'產生時間：{data["generated"]}',
+             f'地名 {len(places)} 筆、古蹟 {len(sites)} 處、耆老 {len(elders)} 位', '']
+    lines += ['需要注意：'] + ['・' + m for m in report] if report else ['沒有發現問題。']
+    with open(os.path.join(SYS, '檢查報告.txt'), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+    print('\n'.join(lines))
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,0 +1,277 @@
+/* 版面：地圖為主的首頁與地圖頁全幅展開；內容頁為單欄閱讀寬度。
+   色彩：古蹟用印章紅（方形標記），地名用埤水藍綠（圓形標記）。 */
+:root{
+  --paper:#F2F4F1;
+  --surface:#FFFFFF;
+  --ink:#1F2A2C;
+  --muted:#5D6A6B;
+  --rule:#D3DAD7;
+  --water:#2B6B75;
+  --water-soft:#DCEBEC;
+  --seal:#A2392F;
+  --seal-soft:#F3E1DE;
+  /* 全站統一使用同一套字體 */
+  --f-body:"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-display:var(--f-body);
+  --f-roman:var(--f-body);
+  --f-mono:var(--f-body);
+  --head-h:56px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    color-scheme:dark;
+    --paper:#121819;--surface:#1A2224;--ink:#E3E9E7;--muted:#9AA7A8;--rule:#2F3B3D;
+    --water:#6CB1BA;--water-soft:#1E373B;--seal:#E07B70;--seal-soft:#3A2321;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.75;display:flex;flex-direction:column}
+a{color:inherit}
+img{max-width:100%;display:block}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.3}
+h2{font-size:18px;font-weight:600}
+p{margin:0}
+
+/* ---------- 頂端 ---------- */
+.site-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px 28px;min-height:var(--head-h);
+  padding:8px max(20px,env(safe-area-inset-right)) 8px max(20px,env(safe-area-inset-left));
+  background:var(--surface);border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:1000}
+.brand{font-family:var(--f-display);font-size:20px;font-weight:700;text-decoration:none;letter-spacing:.04em}
+.site-nav{display:flex;gap:4px}
+.site-nav a{text-decoration:none;padding:4px 12px;border-radius:4px;color:var(--muted)}
+.site-nav a:hover{color:var(--ink);background:var(--paper)}
+.site-nav a.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--ink);border-radius:0}
+.head-search{margin-left:auto}
+.head-search input{width:240px;max-width:100%;font:inherit;font-size:14px;padding:6px 12px;border:1px solid var(--rule);border-radius:4px;background:var(--paper);color:var(--ink)}
+
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+
+/* ---------- 標記 ---------- */
+.mk{width:16px;height:16px;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.3)}
+.mk-site{background:var(--seal);border-radius:2px}
+.mk-place{background:var(--water);border-radius:50%}
+.mk.sel{transform:scale(1.45)}
+.mk.dim{opacity:.35}
+.leaflet-tooltip.lbl{font-family:var(--f-body);font-size:12px;padding:1px 6px;border-radius:3px;box-shadow:none;border:1px solid #c9d0cd;background:#fff;color:#1F2A2C}
+.leaflet-tooltip.lbl::before{display:none}
+.leaflet-container{font-family:var(--f-body);background:var(--paper)}
+.map-wrap{position:relative;min-height:0}
+.map-el{position:absolute;inset:0}
+.offline{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:600;background:var(--surface);border:1px solid var(--rule);
+  padding:6px 14px;border-radius:4px;font-size:13px;color:var(--muted);max-width:calc(100% - 32px)}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .mk{width:12px;height:12px;box-shadow:none;border:0}
+
+/* ---------- 首頁 A ---------- */
+.home{flex:1;display:grid;grid-template-columns:380px 1fr;min-height:0}
+.home .map-wrap{grid-column:1/-1;grid-row:1}
+.home-panel{grid-column:1;grid-row:1;z-index:500;margin:16px;align-self:start;max-height:calc(100% - 32px);overflow:auto;
+  background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 4px 18px rgba(20,30,30,.12)}
+.home-panel h1{font-family:var(--f-display);font-size:26px;letter-spacing:.04em}
+.home-panel .lead{color:var(--muted);font-size:14px}
+.counts{display:flex;gap:16px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.counts b{font-size:18px;color:var(--ink);font-weight:600;margin-right:2px}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--surface);border-radius:20px;padding:2px 12px;font-size:13px;cursor:pointer;text-decoration:none;line-height:1.7}
+.chip[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+a.chip:hover{border-color:var(--water);color:var(--water)}
+.chip.plain{cursor:default;color:var(--muted);border-style:dashed}
+.chip .r{font-family:var(--f-roman);font-size:12px;color:var(--muted)}
+select{font:inherit;font-size:13px;padding:3px 8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
+.list{list-style:none;margin:0;padding:0}
+.list li a{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-top:1px solid var(--rule);text-decoration:none}
+.list li a:hover,.list li a.hl{background:var(--paper)}
+.list .mk{width:12px;height:12px;border:0;box-shadow:none}
+.list .nm{font-weight:600}
+.list .r{font-family:var(--f-roman);font-size:13px;color:var(--muted);margin-left:6px;font-weight:400}
+.list .town{font-size:12px;color:var(--muted)}
+.empty{color:var(--muted);font-size:14px;padding:12px 0}
+
+/* ---------- 地圖 C ---------- */
+.mapview{flex:1;display:grid;grid-template-columns:1fr 420px;min-height:0}
+.side{background:var(--surface);border-left:1px solid var(--rule);overflow:auto;padding:20px 22px 32px;display:flex;flex-direction:column;gap:18px}
+.side-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.side .name{font-family:var(--f-display);font-size:30px;font-weight:700;letter-spacing:.06em}
+.side .hint{color:var(--muted)}
+
+/* ---------- 內容頁 ---------- */
+.page{width:100%;max-width:760px;margin:0 auto;padding:16px max(20px,env(safe-area-inset-right)) 64px max(20px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:28px}
+.crumb{font-size:13px;color:var(--muted)}
+.crumb a{color:var(--muted)}
+.kicker{font-size:13px;color:var(--muted);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.title{font-family:var(--f-display);font-size:clamp(32px,5vw,44px);font-weight:700;letter-spacing:.05em}
+.roman{font-family:var(--f-roman);font-size:17px;color:var(--muted)}
+.prose{max-width:65ch;font-size:17px}
+.section{display:flex;flex-direction:column;gap:12px}
+.section > h2{display:flex;align-items:baseline;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.section > h2 small{font-size:13px;color:var(--muted);font-weight:400}
+.mini-map{height:260px;border-radius:6px;overflow:hidden;border:1px solid var(--rule);position:relative}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:14px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;font-variant-numeric:tabular-nums}
+.note{font-size:13px;color:var(--muted)}
+.tag-ex{font-size:11px;color:var(--muted);border:1px solid var(--rule);border-radius:3px;padding:0 5px;margin-left:6px;white-space:nowrap}
+
+/* 照片 */
+.gallery{display:flex;flex-direction:column;gap:8px}
+.gallery .main{aspect-ratio:3/2;width:100%;object-fit:cover;border-radius:6px;cursor:zoom-in;background:var(--rule)}
+.thumbs{display:flex;gap:8px;overflow-x:auto}
+.thumbs button{padding:0;border:2px solid transparent;border-radius:4px;background:none;cursor:pointer;flex:none}
+.thumbs button[aria-current="true"]{border-color:var(--ink)}
+.thumbs img{width:88px;height:60px;object-fit:cover;border-radius:2px}
+.missing{display:grid;place-items:center;border:1px dashed var(--rule);border-radius:4px;color:var(--muted);font-size:12px;padding:8px;text-align:center;min-height:60px}
+
+/* 地名字卡 */
+.wordcard{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:28px 0 26px;border-bottom:1px solid var(--rule)}
+.wordcard .title{font-size:clamp(44px,9vw,72px);letter-spacing:.18em;margin-right:-.18em}
+.readings{display:grid;grid-template-columns:auto auto;gap:4px 16px;align-items:baseline}
+.readings dt{font-size:12px;color:var(--muted);text-align:right;letter-spacing:.06em}
+.readings dd{margin:0;font-family:var(--f-roman);font-size:22px;text-align:left}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+
+/* 關聯卡 */
+.rel{display:flex;flex-direction:column;gap:8px}
+.rel a.item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);text-decoration:none}
+.rel a.item:hover{border-color:var(--water)}
+.rel .item img,.rel .item .ph{width:56px;height:42px;object-fit:cover;border-radius:3px;background:var(--rule)}
+.rel .item .mk{width:12px;height:12px;border:0;box-shadow:none}
+.rel .nm{font-weight:600}
+.rel .sub{font-size:13px;color:var(--muted)}
+.rel .d{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* 耆老卡片 A */
+.elder{display:grid;grid-template-columns:120px 1fr;gap:16px;padding:16px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);scroll-margin-top:calc(var(--head-h) + 16px)}
+.elder.flash{box-shadow:0 0 0 3px var(--water-soft),0 0 0 4px var(--water)}
+.elder .face{width:120px;height:120px;object-fit:cover;border-radius:4px;cursor:zoom-in;background:var(--rule)}
+.elder .body{display:flex;flex-direction:column;gap:10px;min-width:0}
+.elder .who{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.elder .who b{font-size:18px;font-family:var(--f-mono);letter-spacing:.02em}
+.elder .who span{font-size:13px;color:var(--muted)}
+.elder audio{width:100%;height:36px}
+.elder .sum{font-size:15px}
+.elder .acts{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ink);background:var(--surface);border-radius:4px;padding:3px 12px;font-size:14px;cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--ink);color:var(--surface)}
+.transcript{border-top:1px solid var(--rule);padding-top:12px;font-size:15px;max-height:420px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.transcript p:empty{height:6px}
+.elder.compact{grid-template-columns:64px 1fr;padding:12px;gap:12px}
+.elder.compact .face{width:64px;height:64px}
+.elder.compact .sum{font-size:14px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* 列表頁 */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;border:1px solid var(--rule);border-radius:6px;overflow:hidden;background:var(--surface);text-decoration:none}
+.card:hover{border-color:var(--seal)}
+.card img,.card .ph{aspect-ratio:3/2;object-fit:cover;width:100%;background:var(--rule)}
+.card .in{padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.card .nm{font-family:var(--f-display);font-size:19px;font-weight:700}
+.card .sub{font-size:13px;color:var(--muted)}
+.dict{display:flex;flex-direction:column}
+.dict a{display:grid;grid-template-columns:9em 1fr auto;gap:16px;align-items:baseline;padding:12px 4px;border-bottom:1px solid var(--rule);text-decoration:none}
+.dict a:hover{background:var(--surface)}
+.dict .nm{font-family:var(--f-display);font-size:22px;font-weight:700;letter-spacing:.08em}
+.dict .r{font-family:var(--f-roman);color:var(--muted)}
+.dict .town{font-size:13px;color:var(--muted)}
+.group-h{font-size:13px;color:var(--muted);letter-spacing:.08em;padding:20px 4px 6px;border-bottom:1px solid var(--ink)}
+
+/* 搜尋 */
+.hits{display:flex;flex-direction:column;gap:10px}
+.hit{display:block;padding:12px 14px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);text-decoration:none}
+.hit:hover{border-color:var(--water)}
+.hit .t{font-weight:600;display:flex;align-items:center;gap:8px}
+.hit .t .mk{width:11px;height:11px;border:0;box-shadow:none}
+.hit .s{font-size:14px;color:var(--muted)}
+mark{background:var(--water-soft);color:inherit;padding:0 1px}
+.search-big{display:flex;gap:8px}
+.search-big input{flex:1;font:inherit;font-size:17px;padding:8px 14px;border:1px solid var(--ink);border-radius:4px;background:var(--surface);color:var(--ink)}
+
+/* 尚未製作的空白頁 */
+.blank{flex:1;margin:24px max(20px,env(safe-area-inset-right)) 24px max(20px,env(safe-area-inset-left));border:2px dashed var(--rule);border-radius:8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;color:var(--muted);min-height:50vh;padding:24px}
+.blank h1{font-family:var(--f-display);font-size:28px;color:var(--ink);letter-spacing:.05em}
+.blank-tag{font-size:12px;letter-spacing:.1em;border:1px solid var(--rule);border-radius:3px;padding:0 8px}
+
+footer.foot{font-size:12px;color:var(--muted);padding:16px max(20px,env(safe-area-inset-left));border-top:1px solid var(--rule)}
+
+/* 燈箱 */
+.lightbox{position:fixed;inset:0;z-index:2000;background:rgba(12,16,17,.92);display:grid;grid-template-columns:64px 1fr 64px;align-items:center}
+.lightbox figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px;max-height:100vh;padding:24px 0}
+.lightbox img{max-height:calc(100vh - 100px);object-fit:contain}
+.lightbox figcaption{color:#cfd6d4;font-size:14px}
+.lb-nav,.lb-close{background:none;border:0;color:#fff;font-size:40px;cursor:pointer;height:64px}
+.lb-close{position:absolute;top:8px;right:12px;font-size:24px}
+
+@media (max-width:820px){
+  .head-search{margin-left:0;width:100%}
+  .head-search input{width:100%}
+  .home{display:flex;flex-direction:column}
+  .home .map-wrap{height:52vh;flex:none}
+  .home-panel{margin:0;border-radius:0;border-width:1px 0 0;max-height:none;box-shadow:none}
+  .mapview{display:flex;flex-direction:column}
+  .mapview .map-wrap{height:46vh;flex:none}
+  .side{border-left:0;border-top:1px solid var(--rule)}
+  .two{grid-template-columns:1fr}
+  .dict a{grid-template-columns:1fr;gap:0}
+}
+@media (max-width:480px){
+  .elder{grid-template-columns:1fr}
+  .elder .face{width:100%;height:auto;aspect-ratio:3/2}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+.lightbox[hidden]{display:none}
+
+/* ---------- 地圖頁細節 ---------- */
+body.is-map .foot{display:none}
+.mk-wrap{background:none;border:0}
+.mk{display:block;transition:transform .15s,opacity .15s}
+.mk.hover{transform:scale(1.35)}
+.mk-wrap.on{z-index:900!important}
+.labels-off .leaflet-tooltip.lbl{display:none}
+.labels-off .leaflet-marker-icon:hover + .leaflet-tooltip.lbl{display:block}
+.leaflet-tooltip.lbl{font-weight:500}
+.rel-line{stroke:var(--ink);opacity:.6}
+.map-legend{position:absolute;right:12px;bottom:28px;z-index:500;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:6px 12px;font-size:13px;color:var(--muted)}
+.map-legend span{display:inline-flex;align-items:center;gap:6px}
+.map-legend .mk{width:12px;height:12px;border:0;box-shadow:none}
+.map-legend .sep{width:1px;height:16px;background:var(--rule)}
+.leaflet-control-attribution{font-size:11px}
+.panel-q{width:100%;font:inherit;font-size:14px;padding:7px 12px;border:1px solid var(--rule);border-radius:4px;background:var(--paper);color:var(--ink)}
+.home-panel h1{font-size:24px}
+.list .unlinked{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-top:1px solid var(--rule);color:var(--muted)}
+.list .unlinked .mk{opacity:.4}
+
+/* 面板：選取後的內容 */
+.pd{display:flex;flex-direction:column;gap:12px}
+.pd .back{font-size:14px;color:var(--muted);text-decoration:none;align-self:flex-start}
+.pd .back:hover{color:var(--ink)}
+.pd .kicker{display:flex;align-items:center;gap:8px}
+.pd .kicker .mk{width:11px;height:11px;border:0;box-shadow:none}
+.pd-name{font-size:30px;font-weight:700;letter-spacing:.06em}
+.pd .roman{font-size:15px;margin-top:-6px}
+.pd-photo{width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:4px;background:var(--rule)}
+.pd-intro{font-size:15px}
+.pd h3{font-size:14px;font-weight:600;padding-top:6px;color:var(--muted);letter-spacing:.04em}
+.pd h3 + .list li:first-child a,.pd h3 + .list li:first-child .unlinked{border-top-color:var(--ink)}
+.pd-note{font-size:14px;color:var(--muted)}
+.pd-read{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:0;align-items:baseline}
+.pd-read dt{font-size:12px;color:var(--muted)}
+.pd-read dd{margin:0;font-size:17px}
+.pd audio{width:100%;height:36px}
+.btn.solid{background:var(--ink);color:var(--surface);border-color:var(--ink);justify-content:center;padding:8px 14px;font-weight:600}
+.btn.solid:hover{opacity:.88}
+.pd-go{margin-top:6px}
+@media (max-width:820px){ .map-legend{bottom:20px;right:8px} }
+
+/* 缺檔預設空框 */
+.missing{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  border:1px dashed var(--rule);border-radius:4px;color:var(--muted);font-size:13px;padding:10px;text-align:center;
+  background:repeating-linear-gradient(135deg,transparent 0 8px,var(--paper) 8px 16px)}
+.missing small{font-size:11px;opacity:.8;word-break:break-all}
+.missing.pd-photo{aspect-ratio:3/2;width:100%}
+.missing.audio-missing{flex-direction:row;gap:10px;padding:8px 12px;justify-content:flex-start;min-height:0}

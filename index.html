@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>嘉義古蹟與古地名</title>
+<link rel="stylesheet" href="系統/leaflet/leaflet.css">
+<link rel="stylesheet" href="系統/app.css">
+</head>
+<body>
+<header class="site-head">
+  <a class="brand" href="#/">嘉義古蹟與古地名</a>
+  <nav class="site-nav" aria-label="主選單">
+    <a href="#/" data-nav="map">地圖</a>
+    <a href="#/sites" data-nav="sites">古蹟</a>
+    <a href="#/places" data-nav="places">地名</a>
+  </nav>
+  <form class="head-search" id="head-search" role="search">
+    <label class="sr" for="head-q">搜尋</label>
+    <input id="head-q" type="search" placeholder="搜尋地名、古蹟、訪談內容">
+  </form>
+</header>
+<main id="app"></main>
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-close" type="button" data-lb="close" aria-label="關閉">✕</button>
+  <button class="lb-nav lb-prev" type="button" data-lb="prev" aria-label="上一張">‹</button>
+  <figure><img id="lb-img" alt=""><figcaption id="lb-cap"></figcaption></figure>
+  <button class="lb-nav lb-next" type="button" data-lb="next" aria-label="下一張">›</button>
+</div>
+<noscript>請開啟瀏覽器的 JavaScript 功能才能瀏覽本網站。</noscript>
+<script src="系統/leaflet/leaflet.js"></script>
+<script src="系統/data.js"></script>
+<script src="系統/app.js"></script>
+</body>
+</html>
