@@ -34,6 +34,8 @@
     var ex = s.indexOf(EXAMPLE) === 0;
     return (ex ? '<span class="tag-ex">範例資料</span> ' : '') + esc(ex ? s.slice(EXAMPLE.length) : s);
   }
+  function isExample(s) { return (s || '').indexOf(EXAMPLE) === 0; }
+
   // ---------- 照片、錄音：缺檔時顯示預設空框 ----------
   var MISSING_LABEL = { IMG: '照片未提供', AUDIO: '錄音未提供' };
   function placeholder(kind, cls, name) {
@@ -406,6 +408,242 @@
     if (M) { M.map.remove(); M = null; }
   }
 
+  // ---------- 燈箱 ----------
+  var LB = { list: [], i: 0 };
+  var lb = document.getElementById('lightbox');
+  function lbShow() {
+    var p = LB.list[LB.i];
+    document.getElementById('lb-img').src = p.src;
+    document.getElementById('lb-img').alt = p.name;
+    document.getElementById('lb-cap').textContent = p.caption + '（' + (LB.i + 1) + ' / ' + LB.list.length + '）';
+    lb.querySelectorAll('.lb-nav').forEach(function (b) { b.hidden = LB.list.length < 2; });
+  }
+  function lbOpen(list, i) {
+    LB.list = list.filter(function (p) { return p && !p.missing; });
+    if (!LB.list.length) return;
+    LB.i = Math.max(0, Math.min(i || 0, LB.list.length - 1));
+    lb.hidden = false;
+    lbShow();
+    lb.querySelector('.lb-close').focus();
+  }
+  function lbClose() { lb.hidden = true; document.getElementById('lb-img').removeAttribute('src'); }
+  function lbStep(d) { LB.i = (LB.i + d + LB.list.length) % LB.list.length; lbShow(); }
+  lb.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lb]');
+    if (b) { ({ close: lbClose, prev: function () { lbStep(-1); }, next: function () { lbStep(1); } })[b.dataset.lb](); }
+    else if (e.target === lb) lbClose();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (lb.hidden) return;
+    if (e.key === 'Escape') { lbClose(); e.stopImmediatePropagation(); }
+    else if (e.key === 'ArrowLeft') lbStep(-1);
+    else if (e.key === 'ArrowRight') lbStep(1);
+  }, true);
+
+  // ---------- 小地圖（內容頁用） ----------
+  var minis = [];
+  function miniMap(elId, main, mainType, rel) {
+    var el = document.getElementById(elId);
+    if (!el || !hasPos(main)) return;
+    var map = L.map(el, { zoomControl: true, scrollWheelZoom: false, attributionControl: true });
+    map.attributionControl.setPrefix(false);
+    var t = TILES[TILE_ORDER[0]];
+    L.tileLayer(t.url, { maxZoom: 18, attribution: t.attr }).addTo(map);
+    var pts = [[main.lat, main.lng]];
+    rel.forEach(function (r) {
+      if (!hasPos(r[1])) return;
+      var seg = [[main.lat, main.lng], [r[1].lat, r[1].lng]];
+      L.polyline(seg, { color: '#FFFFFF', weight: 8, opacity: 0.95, interactive: false }).addTo(map);
+      L.polyline(seg, { color: '#1A2224', weight: 4, dashArray: '10 8', interactive: false }).addTo(map);
+      pts.push([r[1].lat, r[1].lng]);
+    });
+    function mk(type, x, big) {
+      var m = L.marker([x.lat, x.lng], {
+        icon: L.divIcon({ className: 'mk-wrap' + (big ? ' on' : ''), html: '<i class="mk mk-' + type + (big ? ' sel' : '') + '"></i>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+        title: x.name
+      }).addTo(map);
+      m.bindTooltip(esc(x.name), { permanent: true, interactive: !big, direction: 'right', offset: [10, 0], className: 'lbl' });
+      if (!big) m.on('click', function () { location.hash = '#/' + type + '/' + enc(x.id); });
+    }
+    rel.forEach(function (r) { if (hasPos(r[1])) mk(r[0], r[1], false); });
+    mk(mainType, main, true);
+    if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 16 });
+    else map.setView(pts[0], 16);
+    minis.push(map);
+  }
+  function destroyMinis() { minis.forEach(function (m) { m.remove(); }); minis = []; }
+
+  // ---------- 耆老卡片（線框 A：精簡） ----------
+  var elderById = {};
+  D.elders.forEach(function (e) { elderById[e.id] = e; });
+
+  function elderMeta(e) {
+    var bits = [];
+    if (e.gender) bits.push(e.gender);
+    if (e.birth) bits.push(String(e.birth).slice(0, 4) + ' 年生');
+    if (e.residence) bits.push('居住：' + e.residence.replace(/^嘉義市/, ''));
+    return bits.join('・');
+  }
+  function elderCard(e, opts) {
+    opts = opts || {};
+    var photos = e.photos || [];
+    var face = photos[0];
+    var h = '<article class="elder" id="elder-' + esc(e.id) + '">';
+    h += face && !face.missing
+      ? '<button type="button" class="face-btn" data-gallery="' + esc(e.id) + '" aria-label="展開 ' + esc(e.id) + ' 的照片"><img class="face" src="' + esc(face.thumb || face.src) + '" alt="" data-name="' + esc(face.name) + '"></button>'
+      : placeholder('IMG', 'face', face && face.name);
+    h += '<div class="body">';
+    h += '<div class="who"><b>' + esc(e.name || e.id) + '</b>' + (e.name ? '<span>' + esc(e.id) + '</span>' : '') + '<span>' + esc(elderMeta(e)) + '</span></div>';
+    (e.audio && e.audio.length ? e.audio : [null]).forEach(function (a) { h += audio(a || { missing: true, name: '' }); });
+    if (e.summary) h += '<p class="sum">' + text(e.summary) + '</p>';
+    var tags = (e.places || []).map(function (pid) {
+      var p = placeById[pid];
+      return p ? '<a class="chip" href="#/place/' + enc(p.id) + '">' + esc(p.name) + '</a>' : '';
+    }).concat((e.placesUnlinked || []).map(function (t) { return '<span class="chip plain" title="地名資料庫未收錄">' + esc(t) + '</span>'; }));
+    if (tags.length) h += '<div class="mentions"><span class="lab">提到的地名</span>' + tags.join('') + '</div>';
+    var acts = [];
+    var nPhotos = photos.filter(function (p) { return !p.missing; }).length;
+    if (photos.length) acts.push('<button type="button" class="btn" data-gallery="' + esc(e.id) + '" data-label="照片（' + nPhotos + '）" aria-expanded="false" aria-controls="gl-' + esc(e.id) + '"' + (nPhotos ? '' : ' disabled') + '>照片（' + nPhotos + '）</button>');
+    var doc = (e.docs || [])[0];
+    if (doc) {
+      if (doc.text) acts.push('<button type="button" class="btn" data-transcript="' + esc(e.id) + '" aria-expanded="false" aria-controls="tr-' + esc(e.id) + '">展開文字稿</button>');
+      acts.push(doc.missing ? '<span class="btn disabled" aria-disabled="true">文字稿未提供</span>'
+                            : '<a class="btn" href="' + esc(doc.src) + '" download>原始 Word 檔</a>');
+    }
+    if (opts.siteLink && e.site && siteById[e.site]) acts.push('<a class="btn" href="#/site/' + enc(e.site) + '?e=' + enc(e.id) + '">來自：' + esc(siteById[e.site].name) + ' →</a>');
+    if (acts.length) h += '<div class="acts">' + acts.join('') + '</div>';
+    // 照片列：點「照片」先展開一排縮圖，點縮圖才開大圖
+    var j = 0;  // 燈箱只收有檔案的照片，索引要跳過缺檔
+    if (nPhotos) h += '<div class="e-gallery" id="gl-' + esc(e.id) + '" hidden>' + photos.map(function (p) {
+      return p.missing ? placeholder('IMG', 'e-thumb', p.name)
+        : '<button type="button" class="e-thumb" data-photos="' + esc(e.id) + '" data-i="' + j + '" aria-label="放大第 ' + (++j) + ' 張">' +
+          '<img src="' + esc(p.thumb || p.src) + '" alt="" data-name="' + esc(p.name) + '"></button>';
+    }).join('') + '</div>';
+    if (doc && doc.text) h += '<div class="transcript" id="tr-' + esc(e.id) + '" hidden>' + doc.text.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') + '</div>';
+    h += '</div></article>';
+    return h;
+  }
+
+  // 卡片上的按鈕：照片列展開、照片燈箱、文字稿展開
+  app.addEventListener('click', function (e) {
+    var gl = e.target.closest('[data-gallery]');
+    if (gl) {
+      var id = gl.dataset.gallery;
+      var row = document.getElementById('gl-' + id);
+      if (!row) return;
+      row.hidden = !row.hidden;
+      var btn = app.querySelector('.btn[data-gallery="' + id + '"]');
+      if (btn) { btn.setAttribute('aria-expanded', !row.hidden); btn.textContent = row.hidden ? btn.dataset.label : '收合照片'; }
+      return;
+    }
+    var ph = e.target.closest('[data-photos]');
+    if (ph) {
+      var who = elderById[ph.dataset.photos] || siteById[ph.dataset.photos];
+      var cap = who.name || who.id;
+      lbOpen((who.photos || []).map(function (p) { return { src: p.src, name: p.name, missing: p.missing, caption: cap + '・' + p.name }; }), +ph.dataset.i || 0);
+      return;
+    }
+    var tr = e.target.closest('[data-transcript]');
+    if (tr) {
+      var box = document.getElementById('tr-' + tr.dataset.transcript);
+      box.hidden = !box.hidden;
+      tr.setAttribute('aria-expanded', !box.hidden);
+      tr.textContent = box.hidden ? '展開文字稿' : '收合文字稿';
+    }
+  });
+
+  // ---------- 古蹟頁（線框 A：單欄長頁） ----------
+  function notFound(kind, id) {
+    return '<section class="page"><div class="crumb"><a href="#/">地圖</a></div>' +
+      '<h1 class="title">找不到這筆' + kind + '</h1><p class="prose">編號「' + esc(id) + '」不在資料庫中。請回到地圖重新選擇。</p></section>';
+  }
+
+  function renderSite(id, q) {
+    var s = siteById[id];
+    if (!s) { app.innerHTML = notFound('古蹟', id); return; }
+    var photos = s.photos || [];
+    var h = '<article class="page site-page">';
+    h += '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › <a href="#/sites">古蹟</a> › ' + esc(s.name) + '</nav>';
+
+    // 標題
+    var romans = [s.tailo, s.poj].filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    h += '<header class="head"><div class="kicker"><i class="mk mk-site"></i>古蹟 ' + esc(s.id) + (where(s) ? '・' + esc(where(s)) : '') + '</div>' +
+      '<h1 class="title">' + esc(s.name) + '</h1>' +
+      (romans.length ? '<div class="roman">' + esc(romans.join(' ／ ')) + '</div>' : '') + '</header>';
+
+    if (s.intro) h += '<p class="prose">' + text(s.intro) + '</p>';
+
+    // 位置
+    var rel = [];
+    var nearMap = {};
+    (s.near || []).forEach(function (n) { nearMap[n.id] = n.m; });
+    (s.places || []).forEach(function (pid) { if (placeById[pid]) rel.push(['place', placeById[pid]]); });
+    // 照片與位置：照片（1–2 張）和小地圖並排
+    var shown = photos.filter(function (p) { return !p.missing; });
+    var pic = '';
+    if (photos.length) {
+      var first = shown[0] || photos[0];
+      pic = first.missing ? placeholder('IMG', 'loc-photo', first.name)
+        : '<button type="button" class="loc-photo" data-photos="' + esc(s.id) + '" data-i="0" aria-label="放大照片">' +
+          '<img src="' + esc(first.thumb || first.src) + '" alt="' + esc(s.name) + '" data-name="' + esc(first.name) + '">' +
+          (shown.length > 1 ? '<span class="count">1 / ' + shown.length + '</span>' : '') + '</button>';
+    }
+    if (pic || hasPos(s)) {
+      h += '<section class="section" aria-label="照片與位置">' +
+        '<div class="loc-grid' + (pic && hasPos(s) ? ' two' : '') + '">' + pic +
+        (hasPos(s) ? '<div class="mini-map" id="site-map"></div>' : '') + '</div>';
+    }
+    if (hasPos(s)) {
+      h += '<div class="loc-row"><dl class="facts">' +
+          (s.county ? '<dt>縣市</dt><dd>' + esc(s.county) + '</dd>' : '') +
+          (s.town ? '<dt>鄉鎮</dt><dd>' + esc(s.town) + '</dd>' : '') +
+          (s.village ? '<dt>村里</dt><dd>' + esc(s.village) + '</dd>' : '') +
+          '<dt>經緯度</dt><dd>' + s.lat.toFixed(5) + ', ' + s.lng.toFixed(5) + '</dd></dl>' +
+        '<a class="btn" href="#/map/site/' + enc(s.id) + '">在大地圖上查看 →</a></div>';
+    }
+    if (pic || hasPos(s)) h += '</section>';
+
+    // 附近古地名
+    var rows = [];
+    var listed = {};
+    (s.places || []).forEach(function (pid) {
+      var p = placeById[pid]; if (!p) return;
+      listed[pid] = 1;
+      rows.push(placeRow(p, nearMap[pid], false));
+    });
+    (s.near || []).slice().sort(function (a, b) { return a.m - b.m; }).forEach(function (n) {
+      if (listed[n.id] || !placeById[n.id]) return;
+      rows.push(placeRow(placeById[n.id], n.m, true));
+    });
+    (s.placesUnlinked || []).forEach(function (t) {
+      rows.push('<div class="item unlinked"><i class="mk mk-place"></i><div><div class="nm">' + esc(t) + '</div><div class="sub">地名資料庫尚未收錄</div></div><span class="d"></span></div>');
+    });
+    if (rows.length) h += '<section class="section"><h2>附近古地名 <small>' + rows.length + ' 筆</small></h2><div class="rel">' + rows.join('') + '</div></section>';
+
+    // 耆老訪談
+    var els = (s.elders || []).map(function (eid) { return elderById[eid]; }).filter(Boolean);
+    h += '<section class="section"><h2>耆老訪談 <small>' + els.length + ' 位</small></h2>';
+    if (s.summary) h += '<p class="prose small">' + text(s.summary) + '</p>';
+    h += els.length ? '<div class="elders">' + els.map(function (e) { return elderCard(e); }).join('') + '</div>'
+                    : '<p class="empty">這處古蹟目前沒有耆老訪談。</p>';
+    h += '</section></article>';
+
+    app.innerHTML = h;
+    miniMap('site-map', s, 'site', rel);
+
+    var focus = (q.match(/(?:^|&)e=([^&]+)/) || [])[1];
+    var card = focus && document.getElementById('elder-' + decodeURIComponent(focus));
+    if (card) { card.scrollIntoView({ block: 'start' }); card.classList.add('flash'); setTimeout(function () { card.classList.remove('flash'); }, 2400); }
+    else window.scrollTo(0, 0);
+  }
+
+  function placeRow(p, m, inferred) {
+    return '<a class="item" href="#/place/' + enc(p.id) + '"><i class="mk mk-place"></i><div>' +
+      '<div class="nm">' + esc(p.name) + (p.tailo ? ' <span class="r">' + esc(p.tailo) + '</span>' : '') + '</div>' +
+      (p.intro ? '<div class="sub">' + esc(isExample(p.intro) ? p.intro.slice(EXAMPLE.length) : p.intro) + '</div>' : '') +
+      '</div><span class="d">' + (m != null ? meters(m) : '') + (inferred ? '<br><small>距離推算</small>' : '') + '</span></a>';
+  }
+
   // ---------- 路由 ----------
   function render() {
     var r = parse();
@@ -417,12 +655,20 @@
     });
     document.body.classList.toggle('is-map', page === PAGES.map);
     if (page === PAGES.map) {
+      destroyMinis();
       var t = r.parts[1] === 'site' ? siteById[r.parts[2]] : r.parts[1] === 'place' ? placeById[r.parts[2]] : null;
       document.title = (t ? t.name + '｜' : '') + '嘉義古蹟與古地名';
       renderMap(r);
       return;
     }
     destroyMap();
+    destroyMinis();
+    if (r.view === 'site') {
+      var s = siteById[r.id];
+      document.title = (s ? s.name : '古蹟') + '｜嘉義古蹟與古地名';
+      renderSite(r.id, r.query);
+      return;
+    }
     document.title = page.title + '｜嘉義古蹟與古地名';
     app.innerHTML = blank(page, r);
     window.scrollTo(0, 0);

@@ -296,3 +296,66 @@ body.is-map .foot{display:none}
 .chip-select select:hover{border-color:var(--muted)}
 .chip-select.on select{border-color:var(--ink);background:var(--ink);color:var(--surface)}
 .chip-select.on::after{color:var(--surface)}
+
+/* ---------- 古蹟頁 ---------- */
+.site-page{gap:32px}
+.site-page .head{display:flex;flex-direction:column;gap:6px}
+.site-page .kicker{display:flex;align-items:center;gap:8px}
+.site-page .kicker .mk{width:11px;height:11px;border:0;box-shadow:none}
+.prose.small{font-size:15px;color:var(--muted)}
+.main-btn,.face-btn{padding:0;border:0;background:none;cursor:zoom-in;display:block;width:100%}
+.face-btn{width:auto}
+.missing.main{aspect-ratio:3/2;width:100%}
+.missing.thumb{width:88px;height:60px;min-height:0;padding:2px;font-size:10px}
+.missing.thumb small{display:none}
+.missing.face{width:120px;height:120px}
+.loc-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.rel .item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--rule);border-radius:6px;background:var(--surface);text-decoration:none}
+a.item:hover{border-color:var(--water)}
+.rel .item .mk{width:12px;height:12px;border:0;box-shadow:none}
+.rel .item .r{font-weight:400;font-size:14px;color:var(--muted);margin-left:4px}
+.rel .item .sub{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.rel .item .d{text-align:right;line-height:1.4}
+.rel .item .d small{font-size:11px}
+.rel .item.unlinked{border-style:dashed;color:var(--muted)}
+.rel .item.unlinked .mk{opacity:.4}
+.elders{display:flex;flex-direction:column;gap:14px}
+.elder .who b{font-family:var(--f-body);font-size:18px}
+.elder .audio-missing{width:100%}
+.mentions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mentions .lab{font-size:12px;color:var(--muted);margin-right:2px}
+.btn.disabled,.btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+.transcript{background:var(--paper);border:1px solid var(--rule);border-radius:4px;padding:14px 16px}
+.page .mini-map{height:300px}
+.lightbox{grid-template-columns:64px minmax(0,1fr) 64px}
+.lightbox img{max-width:100%}
+/* hidden 屬性一律優先 */
+[hidden]{display:none!important}
+.elder > .face-btn,.elder > .missing.face{align-self:start}
+
+/* 古蹟頁：照片與小地圖並排 */
+.loc-grid{display:grid;gap:12px}
+.loc-grid.two{grid-template-columns:1fr 1fr}
+.loc-grid .mini-map,.loc-photo{height:280px;width:100%}
+.loc-photo{position:relative;padding:0;border:0;border-radius:6px;overflow:hidden;cursor:zoom-in;background:var(--rule);display:block}
+.loc-photo img{width:100%;height:100%;object-fit:cover}
+.loc-photo .count{position:absolute;right:8px;bottom:8px;background:rgba(15,20,21,.72);color:#fff;font-size:12px;padding:1px 8px;border-radius:10px;font-variant-numeric:tabular-nums}
+.missing.loc-photo{cursor:default}
+@media (max-width:640px){ .loc-grid.two{grid-template-columns:1fr} .loc-grid .mini-map,.loc-photo{height:220px} }
+
+/* 只有地圖頁鎖成視窗高度；內容頁依內容延伸，頁尾在最底 */
+html,body{height:auto}
+html{height:100%}
+body{min-height:100%}
+main{flex:1 0 auto;min-height:auto}
+body.is-map{height:100%}
+body.is-map main{flex:1 1 auto;min-height:0}
+
+/* 耆老照片列 */
+.e-gallery{display:flex;flex-wrap:wrap;gap:8px}
+.e-thumb{padding:0;border:0;background:var(--rule);border-radius:4px;overflow:hidden;cursor:zoom-in;width:120px;height:90px;display:block}
+.e-thumb img{width:100%;height:100%;object-fit:cover}
+button.e-thumb:hover{outline:2px solid var(--ink);outline-offset:1px}
+.missing.e-thumb{cursor:default;font-size:11px;padding:4px;min-height:0}
+.missing.e-thumb small{display:none}
+.face-btn{cursor:pointer}
