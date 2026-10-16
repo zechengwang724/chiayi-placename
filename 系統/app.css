@@ -391,3 +391,32 @@ button.e-thumb:hover{outline:2px solid var(--ink);outline-offset:1px}
 .tile-opt[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
 .map-legend .box.legend-box{align-self:stretch;justify-content:center}
 @media (max-width:820px){ .tile-opt{font-size:12px;padding:3px 8px} }
+
+/* ---------- 列表頁 ---------- */
+.list-page{gap:8px}
+.list-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px}
+.list-head .title{font-size:clamp(28px,4vw,36px)}
+.list-head .title small{font-size:15px;color:var(--muted);font-weight:400;letter-spacing:0;margin-left:6px}
+.group-h{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.1em;padding:22px 0 8px;border-bottom:1px solid var(--ink)}
+.srows{display:flex;flex-direction:column}
+.srow{display:grid;grid-template-columns:96px 1fr;gap:16px;padding:14px 0;border-bottom:1px solid var(--rule);text-decoration:none;align-items:start}
+.srow:hover .nm{color:var(--seal)}
+.srow img,.srow .ph{width:96px;height:72px;object-fit:cover;border-radius:4px;background:var(--rule)}
+.srow .bd{display:flex;flex-direction:column;gap:2px;min-width:0}
+.srow .nm{font-size:19px;font-weight:700}
+.srow .r{font-size:14px;font-weight:400;color:var(--muted);margin-left:4px}
+.srow .sub{font-size:14px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.srow .meta{font-size:13px;color:var(--muted)}
+.dict a{grid-template-columns:7.5em 1fr;padding:14px 0;align-items:baseline}
+.dict a:hover{background:none}
+.dict a:hover .nm{color:var(--water)}
+.dict .nm{font-size:22px;letter-spacing:.08em}
+.dict .bd{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dict .r{font-size:16px;color:var(--ink)}
+.dict .sub{font-size:14px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width:820px){ .dict a{grid-template-columns:1fr;gap:4px} }
+@media (max-width:480px){ .srow{grid-template-columns:72px 1fr;gap:12px} .srow img,.srow .ph{width:72px;height:54px} }
+
+/* 地圖內部的圖層、按鈕不得蓋過頂端選單：每張地圖自成一個層級範圍 */
+.mini-map,.map-wrap{isolation:isolate;z-index:0}
+.site-head{z-index:1500}

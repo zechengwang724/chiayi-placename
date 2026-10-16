@@ -710,6 +710,78 @@
       '</div><span class="d">' + (m != null ? meters(m) : '') + (inferred ? '<br><small>距離推算</small>' : '') + '</span></a>';
   }
 
+  // ---------- 列表頁：古蹟（清單列）、地名（辭典式），依鄉鎮分組 ----------
+  var listTown = { sites: '', places: '' };
+
+  function plain(s) { return esc(isExample(s) ? s.slice(EXAMPLE.length) : (s || '')); }
+  function groupByTown(items) {
+    var g = {}, order = [];
+    items.forEach(function (x) {
+      var t = x.town || '未填鄉鎮';
+      if (!g[t]) { g[t] = []; order.push(t); }
+      g[t].push(x);
+    });
+    order.sort(function (a, b) { return a === '未填鄉鎮' ? 1 : b === '未填鄉鎮' ? -1 : (a < b ? -1 : a > b ? 1 : 0); });
+    return order.map(function (t) { return { town: t, items: g[t] }; });
+  }
+  function townSelect(kind, items) {
+    var t = {};
+    items.forEach(function (x) { if (x.town) t[x.town] = 1; });
+    return '<label class="sr" for="lt-' + kind + '">鄉鎮</label><span class="chip-select' + (listTown[kind] ? ' on' : '') + '">' +
+      '<select id="lt-' + kind + '" data-list="' + kind + '"><option value="">全部鄉鎮</option>' +
+      Object.keys(t).sort().map(function (v) { return '<option' + (v === listTown[kind] ? ' selected' : '') + '>' + esc(v) + '</option>'; }).join('') +
+      '</select></span>';
+  }
+  function byId(a, b) {
+    var x = parseFloat(a.id), y = parseFloat(b.id);
+    return !isNaN(x) && !isNaN(y) ? x - y : String(a.id).localeCompare(String(b.id));
+  }
+
+  function renderSites() {
+    var all = D.sites.slice().sort(byId);
+    var items = all.filter(function (s) { return !listTown.sites || s.town === listTown.sites; });
+    var h = '<section class="page list-page">' +
+      '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › 古蹟</nav>' +
+      '<header class="list-head"><h1 class="title">古蹟 <small>' + items.length + ' 處</small></h1>' + townSelect('sites', all) + '</header>';
+    h += items.length ? groupByTown(items).map(function (g) {
+      return '<h2 class="group-h">' + esc(g.town) + '</h2><div class="srows">' + g.items.map(function (s) {
+        var ph = (s.photos || []).filter(function (x) { return !x.missing; })[0];
+        var nEl = (s.elders || []).length, nPl = (s.places || []).length;
+        return '<a class="srow" href="#/site/' + enc(s.id) + '">' +
+          (ph ? '<img src="' + esc(ph.thumb || ph.src) + '" alt="" data-name="' + esc(ph.name) + '">' : '<span class="ph" aria-hidden="true"></span>') +
+          '<div class="bd"><div class="nm">' + esc(s.name) + (s.tailo ? ' <span class="r">' + esc(s.tailo) + '</span>' : '') + '</div>' +
+          (s.intro ? '<p class="sub">' + plain(s.intro) + '</p>' : '') +
+          '<div class="meta">訪談 ' + nEl + ' 位・附近古地名 ' + nPl + '</div></div></a>';
+      }).join('') + '</div>';
+    }).join('') : '<p class="empty">這個鄉鎮目前沒有古蹟資料。</p>';
+    app.innerHTML = h + '</section>';
+  }
+
+  function renderPlaces() {
+    var all = D.places.slice().sort(byId);
+    var items = all.filter(function (p) { return !listTown.places || p.town === listTown.places; });
+    var h = '<section class="page list-page">' +
+      '<nav class="crumb" aria-label="目前位置"><a href="#/">地圖</a> › 地名</nav>' +
+      '<header class="list-head"><h1 class="title">古地名 <small>' + items.length + ' 筆</small></h1>' + townSelect('places', all) + '</header>';
+    h += items.length ? groupByTown(items).map(function (g) {
+      return '<h2 class="group-h">' + esc(g.town) + '</h2><div class="dict">' + g.items.map(function (p) {
+        return '<a href="#/place/' + enc(p.id) + '"><span class="nm">' + esc(p.name) + '</span>' +
+          '<span class="bd">' + (p.tailo ? '<span class="r">' + esc(p.tailo) + '</span>' : '') +
+          (p.intro ? '<span class="sub">' + plain(p.intro) + '</span>' : '') + '</span></a>';
+      }).join('') + '</div>';
+    }).join('') : '<p class="empty">這個鄉鎮目前沒有地名資料。</p>';
+    app.innerHTML = h + '</section>';
+  }
+
+  app.addEventListener('change', function (e) {
+    var k = e.target.dataset && e.target.dataset.list;
+    if (!k) return;
+    listTown[k] = e.target.value;
+    (k === 'sites' ? renderSites : renderPlaces)();
+    var el = document.getElementById('lt-' + k);
+    if (el) el.focus();
+  });
+
   function placeRow(p, m, inferred) {
     return '<a class="item" href="#/place/' + enc(p.id) + '"><i class="mk mk-place"></i><div>' +
       '<div class="nm">' + esc(p.name) + (p.tailo ? ' <span class="r">' + esc(p.tailo) + '</span>' : '') + '</div>' +
@@ -740,6 +812,12 @@
       var s = siteById[r.id];
       document.title = (s ? s.name : '古蹟') + '｜嘉義古蹟與古地名';
       renderSite(r.id, r.query);
+      return;
+    }
+    if (r.view === 'sites' || r.view === 'places') {
+      document.title = (r.view === 'sites' ? '古蹟' : '古地名') + '｜嘉義古蹟與古地名';
+      (r.view === 'sites' ? renderSites : renderPlaces)();
+      window.scrollTo(0, 0);
       return;
     }
     if (r.view === 'place') {
